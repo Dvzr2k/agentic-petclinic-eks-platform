@@ -6,19 +6,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-destroy.sh"
+            "command": "bash -c 'bash \"$(git rev-parse --show-toplevel)/.claude/hooks/block-destroy.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-dangerous-rm.sh"
+            "command": "bash -c 'bash \"$(git rev-parse --show-toplevel)/.claude/hooks/block-dangerous-rm.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/warn-apply-without-plan.sh"
+            "command": "bash -c 'bash \"$(git rev-parse --show-toplevel)/.claude/hooks/warn-apply-without-plan.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-secret-commit.sh"
+            "command": "bash -c 'bash \"$(git rev-parse --show-toplevel)/.claude/hooks/block-secret-commit.sh\"'"
           }
         ]
       },
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-mcp-destroy.sh"
+            "command": "bash -c 'bash \"$(git rev-parse --show-toplevel)/.claude/hooks/block-mcp-destroy.sh\"'"
           }
         ]
       }
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/suggest-validate.sh"
+            "command": "bash -c 'bash \"$(git rev-parse --show-toplevel)/.claude/hooks/suggest-validate.sh\"'"
           }
         ]
       }
