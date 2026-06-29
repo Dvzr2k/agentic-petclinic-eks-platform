@@ -1,3 +1,48 @@
+# -----------------------------------------------------------------------------
+# DNS & ACM (PETPLAT-28, PETPLAT-32 — prod)
+# -----------------------------------------------------------------------------
+
+module "dns" {
+  source = "../../modules/dns"
+
+  domain_name = var.domain_name
+  tags = {
+    Name = "petclinic-${var.environment}-cert"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Route 53 alias A record → ALB (PETPLAT-31 — prod)
+#
+# Apply after k8s Ingress creates the ALB:
+#   terraform apply -var="create_alb_dns_record=true"
+# -----------------------------------------------------------------------------
+
+data "aws_lb" "petclinic_prod" {
+  count = var.create_alb_dns_record ? 1 : 0
+
+  tags = {
+    "kubernetes.io/cluster/petclinic-prod" = "owned"
+    "Ingress"                               = "petclinic-ingress"
+  }
+}
+
+resource "aws_route53_record" "petclinic_prod" {
+  count = var.create_alb_dns_record ? 1 : 0
+
+  zone_id = module.dns.zone_id
+  name    = "petclinic.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = data.aws_lb.petclinic_prod[0].dns_name
+    zone_id                = data.aws_lb.petclinic_prod[0].zone_id
+    evaluate_target_health = true
+  }
+}
+
+# -----------------------------------------------------------------------------
+
 module "vpc" {
   source = "../../modules/vpc"
 
@@ -13,7 +58,7 @@ module "eks" {
 
   project         = var.project
   environment     = var.environment
-  cluster_version = "1.30"
+  cluster_version = "1.32"
   subnet_ids      = module.vpc.public_subnet_ids
   cluster_sg_id   = module.vpc.eks_cluster_sg_id
   node_sg_id      = module.vpc.eks_node_sg_id

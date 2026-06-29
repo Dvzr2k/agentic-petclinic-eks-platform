@@ -69,6 +69,23 @@ output "ecr_repository_urls" {
   value       = module.ecr.repository_urls
 }
 
+# --- DNS outputs ---
+
+output "certificate_arn" {
+  description = "Validated ACM wildcard certificate ARN — paste into k8s/base/ingress/ingress.yaml"
+  value       = module.dns.certificate_arn
+}
+
+output "zone_id" {
+  description = "Route 53 hosted zone ID"
+  value       = module.dns.zone_id
+}
+
+output "petclinic_prod_url" {
+  description = "Public HTTPS URL for the prod environment (after ALB DNS record is created)"
+  value       = "https://petclinic.${var.domain_name}"
+}
+
 # --- RDS outputs ---
 
 output "rds_endpoint" {

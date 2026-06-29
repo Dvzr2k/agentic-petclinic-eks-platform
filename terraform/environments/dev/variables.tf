@@ -20,3 +20,21 @@ variable "project" {
   type        = string
   default     = "petclinic"
 }
+
+variable "domain_name" {
+  description = "Domain name for Route 53 hosted zone and ACM certificate"
+  type        = string
+  default     = "app-valdezr.link"
+}
+
+variable "alb_dns_name" {
+  description = "DNS name of the ALB created by the LB controller (from kubectl get ingress)"
+  type        = string
+  default     = ""
+}
+
+variable "alb_hosted_zone_id" {
+  description = "Canonical hosted zone ID of the ALB (from aws elbv2 describe-load-balancers)"
+  type        = string
+  default     = ""
+}

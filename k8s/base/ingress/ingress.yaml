@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: petclinic-ingress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: petclinic-ingress
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # Paste the value of: terraform output -raw certificate_arn
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:092443461861:certificate/68ace15d-0fe3-4d10-adec-2570664b4c6a"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-port: "8080"
+    # Use the pre-created ALB security group from the VPC module.
+    # Paste the value of: terraform output -raw alb_sg_id
+    alb.ingress.kubernetes.io/security-groups: "sg-04b4d982b0576df91"
+    # Unique tag so the Terraform data "aws_lb" lookup finds exactly this ALB.
+    alb.ingress.kubernetes.io/tags: "Ingress=petclinic-ingress"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: petclinic-dev.app-valdezr.link
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

@@ -20,3 +20,15 @@ variable "project" {
   type        = string
   default     = "petclinic"
 }
+
+variable "domain_name" {
+  description = "Domain name for Route 53 hosted zone and ACM certificate"
+  type        = string
+  default     = "app-valdezr.link"
+}
+
+variable "create_alb_dns_record" {
+  description = "Set to true after the Ingress creates the ALB to wire the Route 53 alias record"
+  type        = bool
+  default     = false
+}
