@@ -32,3 +32,9 @@ variable "create_alb_dns_record" {
   type        = bool
   default     = false
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key for the GenAI service. Never set in terraform.tfvars — supply via TF_VAR_openai_api_key env var or -var at apply time."
+  type        = string
+  sensitive   = true
+}

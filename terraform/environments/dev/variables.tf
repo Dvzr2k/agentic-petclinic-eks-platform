@@ -38,3 +38,9 @@ variable "alb_hosted_zone_id" {
   type        = string
   default     = ""
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key for the GenAI service. Never set in terraform.tfvars — supply via TF_VAR_openai_api_key env var or -var at apply time."
+  type        = string
+  sensitive   = true
+}

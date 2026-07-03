@@ -331,3 +331,60 @@ resource "aws_eks_addon" "ebs_csi" {
 
   depends_on = [aws_eks_node_group.main]
 }
+
+# -----------------------------------------------------------------------------
+# External Secrets Operator — IRSA Role (PETPLAT-37)
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_role" "eso" {
+  name = "${local.name_prefix}-eso-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_provider_url}:sub" = "system:serviceaccount:external-secrets:external-secrets-sa"
+          "${local.oidc_provider_url}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-eso-role"
+    Component = "compute"
+  })
+}
+
+resource "aws_iam_policy" "eso_secrets_access" {
+  name        = "${local.name_prefix}-eso-secrets-policy"
+  description = "Allow External Secrets Operator to read petclinic secrets from Secrets Manager"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+      ]
+      Resource = "arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/*"
+    }]
+  })
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-eso-secrets-policy"
+    Component = "compute"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eso" {
+  policy_arn = aws_iam_policy.eso_secrets_access.arn
+  role       = aws_iam_role.eso.name
+}

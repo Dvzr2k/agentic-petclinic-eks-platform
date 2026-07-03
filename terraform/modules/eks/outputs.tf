@@ -39,6 +39,11 @@ output "ebs_csi_role_arn" {
   value       = aws_iam_role.ebs_csi.arn
 }
 
+output "eso_role_arn" {
+  description = "ARN of the External Secrets Operator IRSA role"
+  value       = aws_iam_role.eso.arn
+}
+
 output "kubeconfig_command" {
   description = "Command to configure kubectl access to the cluster"
   value       = "aws eks update-kubeconfig --name ${aws_eks_cluster.main.name} --region ${data.aws_region.current.name}"

@@ -23,7 +23,7 @@ data "aws_lb" "petclinic_prod" {
 
   tags = {
     "kubernetes.io/cluster/petclinic-prod" = "owned"
-    "Ingress"                               = "petclinic-ingress"
+    "Ingress"                              = "petclinic-ingress"
   }
 }
 
@@ -58,13 +58,13 @@ module "eks" {
 
   project         = var.project
   environment     = var.environment
-  cluster_version = "1.32"
+  cluster_version = "1.34"
   subnet_ids      = module.vpc.public_subnet_ids
   cluster_sg_id   = module.vpc.eks_cluster_sg_id
   node_sg_id      = module.vpc.eks_node_sg_id
 
   node_instance_types = ["t4g.small"]
-  node_ami_type       = "AL2_ARM_64"
+  node_ami_type       = "AL2023_ARM_64"
   node_min_size       = 2
   node_max_size       = 4
   node_desired_size   = 2
@@ -107,4 +107,16 @@ module "rds" {
   backup_retention_period = 30
   skip_final_snapshot     = false
   deletion_protection     = false
+}
+
+# -----------------------------------------------------------------------------
+# Secrets Manager (PETPLAT-33)
+# -----------------------------------------------------------------------------
+
+module "secrets" {
+  source = "../../modules/secrets"
+
+  project        = var.project
+  environment    = var.environment
+  openai_api_key = var.openai_api_key
 }

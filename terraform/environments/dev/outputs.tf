@@ -62,6 +62,11 @@ output "kubeconfig_command" {
   value       = module.eks.kubeconfig_command
 }
 
+output "eso_role_arn" {
+  description = "ARN of the External Secrets Operator IRSA role"
+  value       = module.eks.eso_role_arn
+}
+
 # --- ECR outputs ---
 
 output "ecr_repository_urls" {
@@ -102,4 +107,12 @@ output "rds_connection_string" {
 output "rds_secret_arn" {
   description = "Secrets Manager ARN for RDS credentials"
   value       = module.rds.secret_arn
+}
+
+# --- Secrets Manager outputs ---
+
+output "openai_secret_arn" {
+  description = "Secrets Manager ARN for OpenAI API key"
+  value       = module.secrets.openai_secret_arn
+  sensitive   = true
 }
