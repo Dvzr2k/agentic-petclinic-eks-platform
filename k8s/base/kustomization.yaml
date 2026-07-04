@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - config-server/serviceaccount.yaml
+  - config-server/configmap.yaml
+  - config-server/deployment.yaml
+  - config-server/service.yaml
+  - discovery-server/serviceaccount.yaml
+  - discovery-server/configmap.yaml
+  - discovery-server/deployment.yaml
+  - discovery-server/service.yaml
+  - customers-service/serviceaccount.yaml
+  - customers-service/configmap.yaml
+  - customers-service/deployment.yaml
+  - customers-service/service.yaml
+  - visits-service/serviceaccount.yaml
+  - visits-service/configmap.yaml
+  - visits-service/deployment.yaml
+  - visits-service/service.yaml
+  - vets-service/serviceaccount.yaml
+  - vets-service/configmap.yaml
+  - vets-service/deployment.yaml
+  - vets-service/service.yaml
+  - genai-service/serviceaccount.yaml
+  - genai-service/configmap.yaml
+  - genai-service/deployment.yaml
+  - genai-service/service.yaml
+  - api-gateway/serviceaccount.yaml
+  - api-gateway/configmap.yaml
+  - api-gateway/deployment.yaml
+  - api-gateway/service.yaml
+  - admin-server/serviceaccount.yaml
+  - admin-server/configmap.yaml
+  - admin-server/deployment.yaml
+  - admin-server/service.yaml
