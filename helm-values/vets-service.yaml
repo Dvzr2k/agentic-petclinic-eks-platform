@@ -1,0 +1,36 @@
+# vets-service: MySQL-backed. SPRING_DATASOURCE_URL is env-specific,
+# set via configMapOverrides in dev.yaml/prod.yaml, not here.
+#
+# 'production' is kept active alongside docker,mysql — vets-service gates
+# its Caffeine CacheConfig on @Profile("production"); dropping it silently
+# disables caching.
+component: service
+
+image:
+  name: vets-service
+
+service:
+  port: 8083
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: docker,mysql,production
+  - name: SPRING_DATASOURCE_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: rds-credentials
+        key: username
+  - name: SPRING_DATASOURCE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: rds-credentials
+        key: password
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

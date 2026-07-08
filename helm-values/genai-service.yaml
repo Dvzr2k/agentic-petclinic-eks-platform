@@ -1,0 +1,31 @@
+# genai-service: no database. Pulls OPENAI_API_KEY from the openai-api-key
+# K8s secret (synced by ESO from AWS Secrets Manager).
+#
+# 'production' is kept active alongside docker — genai-service defaults to
+# this profile per the app config; explicit SPRING_PROFILES_ACTIVE would
+# otherwise drop it.
+component: service
+
+image:
+  name: genai-service
+
+service:
+  port: 8084
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: docker,production
+  - name: OPENAI_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: openai-api-key
+        key: OPENAI_API_KEY
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

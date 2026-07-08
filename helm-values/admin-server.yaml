@@ -1,0 +1,21 @@
+# admin-server: Spring Boot Admin dashboard for monitoring all services.
+component: admin
+
+image:
+  name: admin-server
+
+service:
+  port: 9090
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: docker
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

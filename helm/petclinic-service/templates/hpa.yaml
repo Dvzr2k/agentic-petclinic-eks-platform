@@ -1,0 +1,24 @@
+{{- $ac := index .Values.autoscalingOverrides (include "petclinic-service.name" .) }}
+{{- if $ac }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "petclinic-service.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "petclinic-service.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "petclinic-service.name" . }}
+  minReplicas: {{ $ac.minReplicas }}
+  maxReplicas: {{ $ac.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $ac.targetCPUUtilizationPercentage }}
+{{- end }}

@@ -1,0 +1,67 @@
+# Prod overrides: per-service replica counts, HPA targets, and PDB
+# settings — deliberately not blanket values, matching k8s/overlays/prod
+# exactly. genai-service/admin-server stay at 1 replica with no HPA
+# (lower priority, cost saving); admin-server additionally has no PDB
+# (monitoring tool, single replica is acceptable to lose briefly).
+#
+# Prod RDS is not deployed yet (E-5 prod wiring is PETPLAT-27, not yet
+# applied) — SPRING_DATASOURCE_URL below is a placeholder. Swap for the
+# real endpoint via `terraform output rds_endpoint` in
+# terraform/environments/prod once that environment exists.
+image:
+  registry: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod
+  tag: v1.0.0
+
+replicaOverrides:
+  config-server: 2
+  discovery-server: 2
+  api-gateway: 2
+  customers-service: 2
+  visits-service: 2
+  vets-service: 2
+  genai-service: 1
+  admin-server: 1
+
+autoscalingOverrides:
+  api-gateway:
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  customers-service:
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  visits-service:
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  vets-service:
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  genai-service:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+podDisruptionBudgetOverrides:
+  config-server:
+    minAvailable: 1
+  discovery-server:
+    minAvailable: 1
+  api-gateway:
+    minAvailable: 1
+  customers-service:
+    minAvailable: 1
+  visits-service:
+    minAvailable: 1
+  vets-service:
+    minAvailable: 1
+
+configMapOverrides:
+  customers-service:
+    SPRING_DATASOURCE_URL: "jdbc:mysql://REPLACE-WITH-PROD-RDS-ENDPOINT:3306/petclinic"
+  visits-service:
+    SPRING_DATASOURCE_URL: "jdbc:mysql://REPLACE-WITH-PROD-RDS-ENDPOINT:3306/petclinic"
+  vets-service:
+    SPRING_DATASOURCE_URL: "jdbc:mysql://REPLACE-WITH-PROD-RDS-ENDPOINT:3306/petclinic"

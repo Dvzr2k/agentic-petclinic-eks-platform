@@ -1,0 +1,22 @@
+# config-server: starts first, no dependencies, no init containers.
+# Uses /actuator/health for all three probes (readiness/liveness overridden
+# below) since it has no separate readiness/liveness indicators of its own.
+component: server
+
+image:
+  name: config-server
+
+service:
+  port: 8888
+
+configMap:
+  GIT_REPO: "https://github.com/spring-petclinic/spring-petclinic-microservices-config"
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: docker
+
+probes:
+  startupPath: /actuator/health
+  readinessPath: /actuator/health
+  livenessPath: /actuator/health

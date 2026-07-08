@@ -1,0 +1,14 @@
+# Dev overrides: 1 replica everywhere (chart default, no override map
+# entries needed), no HPA, no PDB. Only image registry/tag and the
+# dev RDS endpoint (for the 3 DB-backed services) are set here.
+image:
+  registry: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev
+  tag: v1.0.0
+
+configMapOverrides:
+  customers-service:
+    SPRING_DATASOURCE_URL: "jdbc:mysql://petclinic-dev-mysql.cbcsis2u4cvm.eu-central-1.rds.amazonaws.com:3306/petclinic"
+  visits-service:
+    SPRING_DATASOURCE_URL: "jdbc:mysql://petclinic-dev-mysql.cbcsis2u4cvm.eu-central-1.rds.amazonaws.com:3306/petclinic"
+  vets-service:
+    SPRING_DATASOURCE_URL: "jdbc:mysql://petclinic-dev-mysql.cbcsis2u4cvm.eu-central-1.rds.amazonaws.com:3306/petclinic"

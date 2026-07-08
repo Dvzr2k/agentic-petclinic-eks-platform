@@ -1,0 +1,103 @@
+# Defaults shared by all 8 services. Each service overrides the relevant
+# subset via helm-values/{service}.yaml, then helm-values/{env}.yaml layers
+# environment-specific settings on top:
+#
+#   helm upgrade --install customers-service helm/petclinic-service/ \
+#     -n petclinic-dev \
+#     -f helm-values/customers-service.yaml \
+#     -f helm-values/dev.yaml \
+#     --set image.tag=${SHA}
+#
+# The release name (e.g. "customers-service") is used throughout as the
+# resource name/selector, and as the lookup key for the per-service
+# override maps below (replicaOverrides, autoscalingOverrides,
+# podDisruptionBudgetOverrides, configMapOverrides) that dev/prod values
+# files populate — this is how one shared chart expresses "prod wants
+# api-gateway at 2 replicas with HPA but genai-service at 1 with none"
+# without per-service if/else branches in the templates.
+
+component: service   # server|service|gateway|admin — set per-service
+
+replicaCount: 1
+replicaOverrides: {}   # {<release-name>: <count>} — set by env values files
+
+image:
+  registry: ""    # e.g. 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev — set by env values files
+  name: ""        # e.g. customers-service — set per-service
+  tag: "v1.0.0"
+  pullPolicy: Always
+
+service:
+  port: 8080      # also used as the container port — set per-service
+
+# Non-secret env vars exposed via ConfigMap (envFrom). Per-service values
+# set the service-invariant keys (CONFIG_SERVER_URL, GIT_REPO, etc.);
+# configMapOverrides below handles keys that differ per environment
+# (SPRING_DATASOURCE_URL for the 3 DB-backed services).
+configMap: {}
+configMapOverrides: {}   # {<release-name>: {<key>: <value>}} — set by env values files
+
+# Extra container env vars beyond the ConfigMap (SPRING_PROFILES_ACTIVE,
+# secretKeyRef-based DB credentials, OPENAI_API_KEY, etc.) — set per-service.
+env: []
+
+# Wait-for init containers enforcing startup order. Each entry becomes a
+# busybox container polling a dependency's health endpoint. Set per-service.
+initContainers: []   # [{name: wait-for-config-server, url: http://config-server:8888/actuator/health}]
+
+# Probe paths. Startup uses a startupProbe (not a fixed initialDelaySeconds)
+# because Spring Boot startup time varies (68-76s observed in real testing)
+# — a fixed delay risks killing a pod that's still booting, not broken.
+# config-server overrides readinessPath/livenessPath to /actuator/health
+# (it has no separate readiness/liveness indicators of its own).
+probes:
+  startupPath: /actuator/health
+  readinessPath: /actuator/health/readiness
+  livenessPath: /actuator/health/liveness
+
+# Reflects real observed Spring Boot usage (~350-390MiB idle) rather than a
+# low placeholder — a too-low memory request causes the scheduler to
+# overpack nodes, leading to memory-pressure evictions once real usage
+# exceeds available memory (this happened in real testing). CPU limits are
+# sized so 8 services' combined limits fit the namespace ResourceQuota
+# (4 cores) with headroom. api-gateway overrides both cpu values higher.
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+
+initContainerResources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 50m
+    memory: 32Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: false   # Spring Boot needs /tmp for uploads/caching
+
+# autoscalingOverrides ({<release-name>: {minReplicas,maxReplicas,targetCPUUtilizationPercentage}})
+# is set by env values files (prod.yaml only). HPA renders only for
+# services present in that map — dev.yaml never populates it, so no
+# service ever gets an HPA in dev.
+autoscalingOverrides: {}
+
+# podDisruptionBudgetOverrides ({<release-name>: {minAvailable}}) — same
+# pattern as autoscalingOverrides. PDB renders only for services present
+# in this map.
+podDisruptionBudgetOverrides: {}

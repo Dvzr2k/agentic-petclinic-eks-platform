@@ -1,0 +1,31 @@
+# api-gateway: the only publicly-exposed service (via ALB Ingress). Higher
+# CPU than the other services since it handles all incoming traffic routing.
+component: gateway
+
+image:
+  name: api-gateway
+
+service:
+  port: 8080
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  DISCOVERY_SERVER_URL: "http://discovery-server:8761"
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: docker
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 800m
+    memory: 512Mi

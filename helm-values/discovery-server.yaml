@@ -1,0 +1,19 @@
+# discovery-server: Eureka registry, starts second. Waits only for config-server.
+component: server
+
+image:
+  name: discovery-server
+
+service:
+  port: 8761
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: docker
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
