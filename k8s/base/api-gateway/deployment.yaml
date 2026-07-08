@@ -37,6 +37,13 @@ spec:
             capabilities:
               drop: ["ALL"]
             readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
         - name: wait-for-discovery-server
           image: busybox:1.36
           command: ['sh', '-c', 'until wget -qO- http://discovery-server:8761/actuator/health; do sleep 5; done']
@@ -45,6 +52,13 @@ spec:
             capabilities:
               drop: ["ALL"]
             readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: api-gateway
           image: petclinic/api-gateway:placeholder
@@ -82,9 +96,9 @@ spec:
           resources:
             requests:
               cpu: 200m
-              memory: 128Mi
+              memory: 384Mi
             limits:
-              cpu: 1000m
+              cpu: 800m
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false

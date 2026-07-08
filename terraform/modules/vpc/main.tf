@@ -175,6 +175,16 @@ resource "aws_security_group_rule" "eks_node_ingress_nodeport" {
   source_security_group_id = aws_security_group.alb.id
 }
 
+resource "aws_security_group_rule" "eks_node_ingress_alb_target_ip" {
+  description              = "Allow ALB to reach pods directly on api-gateway container port (Ingress target-type=ip)"
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_node.id
+  source_security_group_id = aws_security_group.alb.id
+}
+
 resource "aws_security_group_rule" "eks_node_egress_all" {
   description       = "Allow all outbound traffic from nodes"
   type              = "egress"

@@ -158,7 +158,10 @@ Four security groups per environment. Security groups are the **primary access c
 | Inter-node communication | Ingress | All | All | Self (EKS Node SG) |
 | Kubelet API from cluster | Ingress | TCP | 10250 | EKS Cluster SG |
 | NodePort services | Ingress | TCP | 30000-32767 | ALB SG |
+| ALB direct-to-pod (target-type=ip) | Ingress | TCP | 8080 | ALB SG |
 | All outbound | Egress | All | All | `0.0.0.0/0` |
+
+The Ingress uses `alb.ingress.kubernetes.io/target-type: ip` (see [Ingress Resource Annotations](#ingress-resource-annotations)), meaning the ALB connects directly to pod IPs on their container port rather than through NodePort. The NodePort rule above is unused by the current Ingress config but left in place; the ALB direct-to-pod rule is the one actually required for traffic to reach `api-gateway`.
 
 ### RDS Security Group
 
@@ -614,16 +617,20 @@ The startupProbe runs first and disables readiness and liveness checks until Spr
 
 | Service | CPU Request | CPU Limit | Memory Request | Memory Limit |
 |---------|-------------|-----------|----------------|--------------|
-| config-server | 100m | 500m | 128Mi | 512Mi |
-| discovery-server | 100m | 500m | 128Mi | 512Mi |
-| api-gateway | 200m | 1000m | 128Mi | 512Mi |
-| customers-service | 100m | 500m | 128Mi | 512Mi |
-| visits-service | 100m | 500m | 128Mi | 512Mi |
-| vets-service | 100m | 500m | 128Mi | 512Mi |
-| genai-service | 100m | 500m | 128Mi | 512Mi |
-| admin-server | 100m | 500m | 128Mi | 512Mi |
+| config-server | 100m | 400m | 384Mi | 512Mi |
+| discovery-server | 100m | 400m | 384Mi | 512Mi |
+| api-gateway | 200m | 800m | 384Mi | 512Mi |
+| customers-service | 100m | 400m | 384Mi | 512Mi |
+| visits-service | 100m | 400m | 384Mi | 512Mi |
+| vets-service | 100m | 400m | 384Mi | 512Mi |
+| genai-service | 100m | 400m | 384Mi | 512Mi |
+| admin-server | 100m | 400m | 384Mi | 512Mi |
 
-API Gateway gets higher CPU (200m/1000m) because it handles all incoming traffic routing. Memory requests are set to 128Mi (with 512Mi limit) to fit on t4g.small nodes (2 GiB RAM). Spring Boot services idle around 200-300 MiB — the 512Mi limit provides headroom for spikes.
+API Gateway gets higher CPU (200m/800m) because it handles all incoming traffic routing.
+
+CPU limits were reduced from the original 500m/1000m design after real deployment testing: the dev namespace's `ResourceQuota` caps total `limits.cpu` at 4 cores, and 8 services at the original limits summed to 4.5 cores — leaving no room for the 8th service. Limits were trimmed proportionally (500m→400m, gateway 1000m→800m) rather than raising the quota.
+
+Memory requests were raised from the original 128Mi after real usage testing showed Spring Boot services actually use ~350-390MiB at idle — far above the original 128Mi request. Since Kubernetes schedules pods based on requests (not limits), the low 128Mi request caused the scheduler to overpack nodes, leading to node memory-pressure evictions once real usage exceeded available memory. 384Mi reflects real observed usage; the 512Mi limit is unchanged.
 
 ### Environment Variables per Service
 
@@ -1298,20 +1305,24 @@ service:
 resources:
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 384Mi
   limits:
-    cpu: 500m
+    cpu: 400m
     memory: 512Mi
 
 probes:
+  startup:
+    path: /actuator/health
+    periodSeconds: 10
+    failureThreshold: 30   # up to 5 min for Spring Boot to boot
   readiness:
     path: /actuator/health/readiness
-    initialDelaySeconds: 30
     periodSeconds: 10
+    failureThreshold: 3
   liveness:
     path: /actuator/health/liveness
-    initialDelaySeconds: 60
     periodSeconds: 15
+    failureThreshold: 3
 
 env: []              # Additional env vars (set per-service)
 initContainers: []   # Wait-for containers (set per-service)
@@ -1338,7 +1349,7 @@ securityContext:
 helm-values/
 ├── config-server.yaml         # port: 8888, no init containers, no MySQL
 ├── discovery-server.yaml      # port: 8761, wait-for-config init container
-├── api-gateway.yaml           # port: 8080, higher CPU (200m/1000m)
+├── api-gateway.yaml           # port: 8080, higher CPU (200m/800m)
 ├── customers-service.yaml     # port: 8081, MySQL env vars, wait-for inits
 ├── visits-service.yaml        # port: 8082, MySQL env vars, wait-for inits
 ├── vets-service.yaml          # port: 8083, MySQL env vars, wait-for inits

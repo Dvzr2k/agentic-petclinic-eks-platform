@@ -37,6 +37,13 @@ spec:
             capabilities:
               drop: ["ALL"]
             readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: discovery-server
           image: petclinic/discovery-server:placeholder
@@ -74,9 +81,9 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
+              memory: 384Mi
             limits:
-              cpu: 500m
+              cpu: 400m
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false

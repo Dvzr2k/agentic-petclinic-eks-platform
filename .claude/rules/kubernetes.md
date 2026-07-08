@@ -40,31 +40,37 @@ metadata:
 
 Every Deployment MUST include:
 
-1. **Health probes** using Spring Boot Actuator:
+1. **Health probes** using Spring Boot Actuator. Use a `startupProbe`, not a fixed `initialDelaySeconds`, since Spring Boot startup time varies (observed 68-76s in real testing) — a fixed delay risks killing a pod that's still booting, not actually broken:
    ```yaml
+   startupProbe:
+     httpGet:
+       path: /actuator/health
+       port: http
+     periodSeconds: 10
+     failureThreshold: 30   # up to 5 min for Spring Boot to boot
    readinessProbe:
      httpGet:
        path: /actuator/health/readiness
        port: http
-     initialDelaySeconds: 30
      periodSeconds: 10
+     failureThreshold: 3
    livenessProbe:
      httpGet:
        path: /actuator/health/liveness
        port: http
-     initialDelaySeconds: 60
      periodSeconds: 15
+     failureThreshold: 3
    ```
 
-2. **Resource requests and limits**:
+2. **Resource requests and limits** (memory request reflects real observed Spring Boot usage, ~350-390MiB idle — not a low placeholder that would cause node memory-pressure evictions):
    ```yaml
    resources:
      requests:
-       memory: "128Mi"
-       cpu: "250m"
+       memory: "384Mi"
+       cpu: "100m"
      limits:
        memory: "512Mi"
-       cpu: "500m"
+       cpu: "400m"
    ```
 
 3. **Image with SHA tag** (never `latest`):
