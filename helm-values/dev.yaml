@@ -3,7 +3,6 @@
 # dev RDS endpoint (for the 3 DB-backed services) are set here.
 image:
   registry: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev
-  tag: v1.0.0
 
 configMapOverrides:
   customers-service:

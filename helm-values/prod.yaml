@@ -10,7 +10,6 @@
 # terraform/environments/prod once that environment exists.
 image:
   registry: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod
-  tag: v1.0.0
 
 replicaOverrides:
   config-server: 2
