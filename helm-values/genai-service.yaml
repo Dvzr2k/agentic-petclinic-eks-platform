@@ -5,16 +5,13 @@
 # this profile per the app config; explicit SPRING_PROFILES_ACTIVE would
 # otherwise drop it.
 component: service
-
 image:
   name: genai-service
-
+  tag: "6565517"
 service:
   port: 8084
-
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
-
 env:
   - name: SPRING_PROFILES_ACTIVE
     value: docker,production
@@ -23,7 +20,6 @@ env:
       secretKeyRef:
         name: openai-api-key
         key: OPENAI_API_KEY
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
