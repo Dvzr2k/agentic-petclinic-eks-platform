@@ -111,3 +111,20 @@ module "secrets" {
   environment    = var.environment
   openai_api_key = var.openai_api_key
 }
+
+# -----------------------------------------------------------------------------
+# GitHub Actions OIDC (PETPLAT-52) — account-wide CI identity, not per-env.
+# Applied once from dev since that's the only environment actually deployed;
+# the resulting role can push to both petclinic-dev/* and petclinic-prod/*
+# ECR repos (see the module's resource ARN pattern).
+# -----------------------------------------------------------------------------
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  project               = var.project
+  app_repo_github_owner = "Dvzr2k" # derived from `git -C ../spring-petclinic-microservices remote get-url origin`, not a placeholder
+  tags = {
+    Name = "petclinic-github-actions"
+  }
+}

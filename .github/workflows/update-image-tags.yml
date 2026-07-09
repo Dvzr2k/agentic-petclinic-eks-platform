@@ -1,0 +1,60 @@
+# PETPLAT-50 / PETPLAT-87: Update Helm values with the image tag(s) built by
+# the application repo's build-push.yml, so ArgoCD (E-17) picks up the
+# change and deploys. This workflow does NOT deploy anything itself — no
+# kubectl apply, no aws eks update-kubeconfig. GitOps only: commit the tag,
+# let ArgoCD do the rest.
+name: Update Image Tags
+
+on:
+  repository_dispatch:
+    types: [app-image-built]
+
+permissions:
+  contents: write
+
+jobs:
+  update-image-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout platform repo
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Update image tag for changed services only
+        env:
+          SHA: ${{ github.event.client_payload.sha }}
+          SERVICES: ${{ github.event.client_payload.services }}
+        run: |
+          if [[ -z "${SHA}" || -z "${SERVICES}" ]]; then
+            echo "Missing sha or services in repository_dispatch payload" >&2
+            exit 1
+          fi
+
+          for service in ${SERVICES}; do
+            values_file="helm-values/${service}.yaml"
+            if [[ ! -f "${values_file}" ]]; then
+              echo "No values file for '${service}' at ${values_file} — skipping" >&2
+              continue
+            fi
+            yq -i ".image.tag = \"${SHA}\"" "${values_file}"
+          done
+
+      - name: Commit and push
+        env:
+          SHA: ${{ github.event.client_payload.sha }}
+          SERVICES: ${{ github.event.client_payload.services }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm-values/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "ci: update image tags to ${SHA} (${SERVICES})"
+          git push
