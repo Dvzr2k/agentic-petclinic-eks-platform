@@ -10,7 +10,15 @@ metadata:
     app.kubernetes.io/part-of: petclinic
     app.kubernetes.io/managed-by: Helm
     environment: dev
-    pod-security.kubernetes.io/enforce: baseline
+    # [PETPLAT-101 fix] Was enforce:baseline / warn+audit:restricted -
+    # baseline only blocks the worst stuff (privileged, host namespaces);
+    # it doesn't require runAsNonRoot or a seccomp profile, so a container
+    # running as root would only get a warning, not be blocked. Flipped to
+    # enforce:restricted after auditing every Deployment in this namespace
+    # (all 8 app services via the Helm chart) and confirming each one
+    # already satisfies it: runAsNonRoot, seccompProfile, capabilities
+    # dropped to ALL, no privilege escalation.
+    pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/audit: restricted
 ---
@@ -22,6 +30,8 @@ metadata:
     app.kubernetes.io/part-of: petclinic
     app.kubernetes.io/managed-by: Helm
     environment: prod
-    pod-security.kubernetes.io/enforce: baseline
+    # [PETPLAT-101 fix] Same reasoning as petclinic-dev above - audited
+    # and confirmed compliant before flipping.
+    pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/audit: restricted

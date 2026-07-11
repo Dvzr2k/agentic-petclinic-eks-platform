@@ -33,7 +33,12 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-            readOnlyRootFilesystem: false
+            # [PSA audit fix] Was false - only component in observability
+            # left that way. Zipkin is a JVM app (java.io.tmpdir defaults
+            # to /tmp for JIT/scratch files); same emptyDir pattern already
+            # used for the 8 app services (MED-001) and every other
+            # observability component here.
+            readOnlyRootFilesystem: true
           readinessProbe:
             httpGet:
               path: /health
@@ -51,6 +56,12 @@ spec:
             limits:
               cpu: 400m
               memory: 512Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
