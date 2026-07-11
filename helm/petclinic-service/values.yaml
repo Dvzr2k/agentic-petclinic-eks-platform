@@ -89,7 +89,11 @@ containerSecurityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop: ["ALL"]
-  readOnlyRootFilesystem: false   # Spring Boot needs /tmp for uploads/caching
+  # [MED-001 fix] Was false with a comment saying Spring Boot needs /tmp —
+  # true works fine now that templates/deployment.yaml mounts an emptyDir
+  # at /tmp specifically, same pattern already used for Grafana/Prometheus/
+  # Loki/Alertmanager elsewhere in this repo.
+  readOnlyRootFilesystem: true
 
 # autoscalingOverrides ({<release-name>: {minReplicas,maxReplicas,targetCPUUtilizationPercentage}})
 # is set by env values files (prod.yaml only). HPA renders only for
