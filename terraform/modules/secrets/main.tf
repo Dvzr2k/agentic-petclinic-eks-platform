@@ -2,9 +2,47 @@
 # Manages non-RDS application secrets in AWS Secrets Manager.
 # RDS credentials are owned by the rds module (PETPLAT-23) — not duplicated here.
 
+# [Checkov CKV_AWS_149 fix] Shared across all 3 secrets below (rather than
+# a default AWS-managed key, whose policy can't be scoped further) - one
+# customer-managed key here since these 3 all belong to the same
+# "application secrets" boundary; RDS's credential secret gets its own key
+# in the rds module, kept separate since it's a different trust boundary.
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+resource "aws_kms_key" "app_secrets" {
+  description         = "Encryption for ${var.project}-${var.environment} application secrets"
+  enable_key_rotation = true
+
+  # Explicit policy (Checkov CKV2_AWS_64) instead of relying on the
+  # implicit default - grants root account admin, the same effective
+  # access the default policy gives, just declared rather than assumed.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "EnableRootAccountAccess"
+      Effect    = "Allow"
+      Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" }
+      Action    = "kms:*"
+      Resource  = "*"
+    }]
+  })
+
+  tags = merge(var.tags, {
+    Name      = "${var.project}-${var.environment}-app-secrets-key"
+    Component = "secrets"
+  })
+}
+
+resource "aws_kms_alias" "app_secrets" {
+  name          = "alias/${var.project}-${var.environment}-app-secrets"
+  target_key_id = aws_kms_key.app_secrets.key_id
+}
+
 resource "aws_secretsmanager_secret" "openai_api_key" {
   name        = "${var.project}/${var.environment}/openai-api-key"
   description = "OpenAI API key for the GenAI service (${var.project}-${var.environment})"
+  kms_key_id  = aws_kms_key.app_secrets.arn
 
   tags = merge(var.tags, {
     Name      = "${var.project}-${var.environment}-openai-api-key"
@@ -34,6 +72,7 @@ resource "random_password" "grafana_admin" {
 resource "aws_secretsmanager_secret" "grafana_admin" {
   name        = "${var.project}/${var.environment}/grafana-admin"
   description = "Grafana admin credentials (${var.project}-${var.environment})"
+  kms_key_id  = aws_kms_key.app_secrets.arn
 
   tags = merge(var.tags, {
     Name      = "${var.project}-${var.environment}-grafana-admin"
@@ -60,6 +99,7 @@ resource "aws_secretsmanager_secret_version" "grafana_admin" {
 resource "aws_secretsmanager_secret" "alertmanager_smtp" {
   name        = "${var.project}/${var.environment}/alertmanager-smtp"
   description = "Alertmanager SMTP credentials (${var.project}-${var.environment})"
+  kms_key_id  = aws_kms_key.app_secrets.arn
 
   tags = merge(var.tags, {
     Name      = "${var.project}-${var.environment}-alertmanager-smtp"

@@ -153,6 +153,11 @@ resource "aws_sqs_queue" "karpenter_interruption" {
   name                       = "${local.name_prefix}-karpenter-interruption"
   message_retention_seconds  = 300
   visibility_timeout_seconds = 1200
+  # [Checkov CKV_AWS_27 fix] Messages here are just interruption
+  # notifications (instance IDs, event types) - not sensitive - but
+  # SSE-SQS (AWS-managed key, no extra cost) is a one-line default with
+  # no downside, so there's no reason to leave it off.
+  sqs_managed_sse_enabled = true
 
   tags = merge(var.tags, {
     Name      = "${local.name_prefix}-karpenter-interruption"

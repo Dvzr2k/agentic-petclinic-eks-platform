@@ -37,6 +37,27 @@ resource "aws_iam_role_policy_attachment" "cluster_policy" {
   role       = aws_iam_role.cluster.name
 }
 
+# AmazonEKSClusterPolicy doesn't grant KMS access - the cluster role needs
+# this explicitly to use aws_kms_key.eks_secrets for envelope encryption.
+resource "aws_iam_role_policy" "cluster_kms" {
+  name = "${local.name_prefix}-eks-cluster-kms-policy"
+  role = aws_iam_role.cluster.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:CreateGrant",
+        "kms:Encrypt",
+      ]
+      Resource = aws_kms_key.eks_secrets.arn
+    }]
+  })
+}
+
 # -----------------------------------------------------------------------------
 # EKS Cluster
 # -----------------------------------------------------------------------------
@@ -69,7 +90,22 @@ resource "aws_eks_cluster" "main" {
     authentication_mode = "API_AND_CONFIG_MAP"
   }
 
-  enabled_cluster_log_types = ["api", "audit", "authenticator"]
+  # [Checkov CKV_AWS_37 fix] Was missing controllerManager/scheduler -
+  # those two are what show scheduling decisions and control-loop errors,
+  # the other three alone only cover API access and auth.
+  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+  # [Checkov CKV_AWS_58 fix] EKS stores Kubernetes Secret objects in etcd;
+  # without this they're only encrypted by EBS-level encryption on the
+  # control plane's own storage (which we don't manage or see) - this adds
+  # application-layer envelope encryption on top, scoped to just the
+  # "secrets" resource type.
+  encryption_config {
+    resources = ["secrets"]
+    provider {
+      key_arn = aws_kms_key.eks_secrets.arn
+    }
+  }
 
   tags = merge(var.tags, {
     Name      = local.cluster_name
@@ -79,6 +115,45 @@ resource "aws_eks_cluster" "main" {
   depends_on = [
     aws_iam_role_policy_attachment.cluster_policy,
   ]
+}
+
+resource "aws_kms_key" "eks_secrets" {
+  description         = "Envelope encryption for ${local.cluster_name} Kubernetes Secrets"
+  enable_key_rotation = true
+
+  # Explicit policy (Checkov CKV2_AWS_64) instead of relying on the
+  # implicit default - grants root account admin (same as the default
+  # would), plus the cluster role's own decrypt/grant access declared
+  # here directly rather than only through the separate IAM policy.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnableRootAccountAccess"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowEKSClusterRole"
+        Effect    = "Allow"
+        Principal = { AWS = aws_iam_role.cluster.arn }
+        Action    = ["kms:Decrypt", "kms:DescribeKey", "kms:CreateGrant", "kms:Encrypt"]
+        Resource  = "*"
+      },
+    ]
+  })
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-eks-secrets-key"
+    Component = "compute"
+  })
+}
+
+resource "aws_kms_alias" "eks_secrets" {
+  name          = "alias/${local.name_prefix}-eks-secrets"
+  target_key_id = aws_kms_key.eks_secrets.key_id
 }
 
 # -----------------------------------------------------------------------------
@@ -159,6 +234,31 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   role       = aws_iam_role.node.name
 }
 
+# [Checkov CKV_AWS_136 follow-up] ECR repos now encrypt image layers with a
+# customer-managed KMS key (ecr module) instead of the default AWS-owned
+# key - AmazonEC2ContainerRegistryReadOnly doesn't grant KMS access, so
+# without this every image pull would fail once applied. Same
+# ViaService-scoped pattern as the ESO policy above: only works for a KMS
+# call made *by* ECR during an image pull, not a direct kms:Decrypt call.
+resource "aws_iam_role_policy" "node_ecr_kms" {
+  name = "${local.name_prefix}-node-ecr-kms-policy"
+  role = aws_iam_role.node.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "kms:Decrypt"
+      Resource = "*"
+      Condition = {
+        StringEquals = {
+          "kms:ViaService" = "ecr.${data.aws_region.current.name}.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+
 # -----------------------------------------------------------------------------
 # Launch Template (attaches custom node SG + EKS-managed cluster SG)
 # -----------------------------------------------------------------------------
@@ -178,6 +278,19 @@ resource "aws_launch_template" "nodes" {
       volume_type = "gp3"
       encrypted   = true
     }
+  }
+
+  # [Checkov CKV_AWS_79 fix] IMDSv1 allows any process on the node
+  # (including a compromised container that breaks out, or one relying on
+  # a proxy misconfig) to fetch the node IAM role's credentials with a
+  # plain unauthenticated GET - no request signing needed. IMDSv2 requires
+  # a session token from a PUT first, which closes the most common
+  # SSRF-to-credential-theft path. hop_limit=1 additionally stops a
+  # container from reaching the node's IMDS through an extra network hop.
+  metadata_options {
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    http_endpoint               = "enabled"
   }
 
   tag_specifications {
@@ -392,14 +505,33 @@ resource "aws_iam_policy" "eso_secrets_access" {
   # secrets and vice versa once both environments exist.
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DescribeSecret",
-      ]
-      Resource = "arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/*"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = "arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/*"
+      },
+      {
+        # [Checkov CKV_AWS_149 follow-up] Secrets are now encrypted with
+        # customer-managed KMS keys (secrets/rds modules) instead of the
+        # default AWS-managed key, so ESO needs explicit kms:Decrypt.
+        # Resource "*" here is scoped tight by the ViaService condition -
+        # this only works for a KMS call made *by* Secrets Manager during
+        # GetSecretValue, not a direct kms:Decrypt call against any key.
+        Sid      = "DecryptViaSecretsManagerOnly"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${data.aws_region.current.name}.amazonaws.com"
+          }
+        }
+      },
+    ]
   })
 
   tags = merge(var.tags, {

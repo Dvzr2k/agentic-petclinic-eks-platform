@@ -11,6 +11,13 @@ resource "aws_acm_certificate" "main" {
   subject_alternative_names = [var.domain_name]
   validation_method         = "DNS"
 
+  # [Checkov CKV2_AWS_71 fix] Already AWS's default behavior - stated
+  # explicitly rather than left implicit, since Checkov flags an unset
+  # value the same as it would a disabled one.
+  options {
+    certificate_transparency_logging_preference = "ENABLED"
+  }
+
   lifecycle {
     create_before_destroy = true
   }

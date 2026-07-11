@@ -2,6 +2,9 @@ locals {
   name_prefix = "${var.project}-${var.environment}"
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # ------------------------------------------------------------------------------
 # VPC
 # ------------------------------------------------------------------------------
@@ -24,6 +27,121 @@ resource "aws_default_security_group" "default" {
   tags = merge(var.tags, {
     Name      = "${local.name_prefix}-default-sg-RESTRICTED"
     Component = "security"
+  })
+}
+
+# -----------------------------------------------------------------------------
+# VPC Flow Logs
+#
+# [Checkov CKV2_AWS_11 fix] Without this, there's no record of what
+# traffic actually crossed the VPC after the fact - relevant here
+# specifically because there's no NAT Gateway (ADR-0001, SGs are the
+# perimeter instead), so flow logs are the one place to see what a pod's
+# egress traffic to the internet actually looked like if something needs
+# investigating after the fact.
+# -----------------------------------------------------------------------------
+
+resource "aws_kms_key" "vpc_flow_log" {
+  description         = "Encryption for ${local.name_prefix} VPC flow log group"
+  enable_key_rotation = true
+
+  # Explicit policy (Checkov CKV2_AWS_64) instead of relying on the
+  # implicit default - grants the account root full admin, same effective
+  # access the default policy gives, just stated rather than assumed. Also
+  # grants the region's logs service permission to use the key for
+  # encrypting log data, which CloudWatch Logs requires for a KMS-backed
+  # log group.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "EnableRootAccountAccess"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudWatchLogs"
+        Effect    = "Allow"
+        Principal = { Service = "logs.${data.aws_region.current.name}.amazonaws.com" }
+        Action    = ["kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource  = "*"
+      },
+    ]
+  })
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-vpc-flow-log-key"
+    Component = "networking"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name = "/aws/vpc/${local.name_prefix}-flow-logs"
+  # [Checkov CKV_AWS_338 fix] Was 30 days - bumped to a full year so an
+  # investigation months after an incident still has the traffic record,
+  # not just the last month.
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.vpc_flow_log.arn
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-vpc-flow-logs"
+    Component = "networking"
+  })
+}
+
+resource "aws_iam_role" "vpc_flow_log" {
+  name = "${local.name_prefix}-vpc-flow-log-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "vpc-flow-logs.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-vpc-flow-log-role"
+    Component = "networking"
+  })
+}
+
+resource "aws_iam_role_policy" "vpc_flow_log" {
+  name = "${local.name_prefix}-vpc-flow-log-policy"
+  role = aws_iam_role.vpc_flow_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = "${aws_cloudwatch_log_group.vpc_flow_log.arn}:*"
+    }]
+  })
+}
+
+resource "aws_flow_log" "main" {
+  vpc_id                   = aws_vpc.main.id
+  traffic_type             = "ALL"
+  log_destination_type     = "cloud-watch-logs"
+  log_destination          = aws_cloudwatch_log_group.vpc_flow_log.arn
+  iam_role_arn             = aws_iam_role.vpc_flow_log.arn
+  max_aggregation_interval = 600
+
+  tags = merge(var.tags, {
+    Name      = "${local.name_prefix}-vpc-flow-log"
+    Component = "networking"
   })
 }
 
