@@ -1,0 +1,209 @@
+# [MED-003 fix] Default-deny + explicit allow, matching the real service
+# call graph in helm-values/*.yaml. These objects do nothing on their own —
+# the VPC CNI only enforces Security Groups by default. Enforcement is
+# turned on via configuration_values on aws_eks_addon.vpc_cni in
+# terraform/modules/eks/main.tf (enableNetworkPolicy).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Config Server, Discovery Server, Spring Cloud Gateway routing, and Spring
+# Boot Admin's direct actuator polling are all plain intra-namespace calls
+# between these 8 services — allow freely within the namespace rather than
+# hand-enumerating every pair (which breaks the moment a new dependency is
+# added between services).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector: {}
+---
+# api-gateway is the only service reachable from outside the cluster — the
+# ALB target group hits pod IPs directly (they're in the VPC's public
+# subnets per ADR-0001), so the peer is an ipBlock, not a Kubernetes object.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alb-ingress-api-gateway
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/16
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# customers/visits/vets-service are the only 3 with SPRING_DATASOURCE_URL
+# pointed at RDS, which lives in the VPC but outside the cluster's pod
+# network — same ipBlock reasoning as the ALB rule above.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rds-egress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["customers-service", "visits-service", "vets-service"]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/16
+      ports:
+        - protocol: TCP
+          port: 3306
+---
+# api-gateway, customers/visits/vets/genai-service all set
+# MANAGEMENT_ZIPKIN_TRACING_ENDPOINT pointed at zipkin.tracing:9411.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-zipkin-egress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["api-gateway", "customers-service", "visits-service", "vets-service", "genai-service"]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tracing
+      ports:
+        - protocol: TCP
+          port: 9411
+---
+# genai-service is the only service that calls out to a real third party
+# (the OpenAI API) over the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-genai-internet-egress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: genai-service
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/16"]
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# [Bug found while applying MED-003] config-server is Git-backed
+# (helm-values/config-server.yaml GIT_REPO) and fetches its config from
+# github.com over the internet at startup and on every refresh — missed on
+# the first pass since none of the other 7 services need real internet
+# egress. Without this, config-server times out reaching GitHub, which
+# starves its own health endpoint and it gets killed on liveness-probe
+# failure.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-config-server-internet-egress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: config-server
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/16"]
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Prometheus (monitoring namespace) scrapes every app pod's actuator
+# metrics endpoint on its normal service port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring

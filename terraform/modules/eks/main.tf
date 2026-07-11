@@ -47,10 +47,18 @@ resource "aws_eks_cluster" "main" {
   role_arn = aws_iam_role.cluster.arn
 
   vpc_config {
-    subnet_ids              = var.subnet_ids
-    security_group_ids      = [var.cluster_sg_id]
-    endpoint_public_access  = true
-    endpoint_private_access = false
+    subnet_ids             = var.subnet_ids
+    security_group_ids     = [var.cluster_sg_id]
+    endpoint_public_access = true
+    # [Bug found while verifying MED-004] Must be true, not false. With
+    # only the public endpoint enabled and public_access_cidrs restricted
+    # to an admin IP, nodes themselves (which reach the API server via the
+    # public endpoint when private access is off) get locked out of their
+    # own control plane — new nodes can never register, and Karpenter can
+    # never successfully add capacity. Enabling private access gives nodes
+    # (already inside the VPC) a path that isn't subject to the public
+    # CIDR restriction, while humans still use the restricted public path.
+    endpoint_private_access = true
     # [HIGH-002 fix] Was unset, defaulting to 0.0.0.0/0 (reachable from
     # the whole internet). IAM auth is still required to do anything once
     # connected, but this removes that extra network-layer barrier.
@@ -288,6 +296,14 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_version               = data.aws_eks_addon_version.vpc_cni.version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
+
+  # [MED-003 fix] Without this, the NetworkPolicy objects in
+  # k8s/base/network-policies/ are inert — the default VPC CNI only
+  # enforces Security Groups (the perimeter model in ADR-0001), it does
+  # not read or enforce Kubernetes NetworkPolicy resources on its own.
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
 }
 
 # -----------------------------------------------------------------------------
