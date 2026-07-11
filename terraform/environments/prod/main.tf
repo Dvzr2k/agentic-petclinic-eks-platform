@@ -107,7 +107,15 @@ module "rds" {
   multi_az                = false
   backup_retention_period = 30
   skip_final_snapshot     = false
-  deletion_protection     = false
+  # [LOW-003 fix, 4th security audit] Was false. skip_final_snapshot=false
+  # already takes a snapshot before deletion, but that doesn't stop the
+  # delete itself from happening - this adds one more required step
+  # (explicitly disable protection, then destroy) before prod's database
+  # can be torn down, guarding against an accidental/wrong-workspace
+  # destroy rather than an intentional one. Dev intentionally keeps this
+  # false - it's destroyed/recreated often to save cost, and that's the
+  # point.
+  deletion_protection = true
 }
 
 # -----------------------------------------------------------------------------

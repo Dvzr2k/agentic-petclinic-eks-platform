@@ -57,6 +57,12 @@ spec:
 ---
 # Prometheus scrapes app pods in both environments plus Zipkin's own
 # metrics endpoint in the tracing namespace.
+#
+# [MED-002 fix, 4th security audit] Was missing a `ports:` restriction
+# entirely - Prometheus could reach any port on any pod in these 3
+# namespaces. Scoped to the actual ports scrape_configs targets
+# (prometheus.yaml: /actuator/prometheus on 8080-8084) plus Zipkin's own
+# port (9411) for when tracing scraping gets added.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -75,14 +81,39 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: petclinic-dev
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: petclinic-prod
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: tracing
+      ports:
+        - protocol: TCP
+          port: 9411
 ---
 # Alertmanager emails alerts out through a real SMTP server on the
 # internet (see MED-002 — smtp_auth_password_file).

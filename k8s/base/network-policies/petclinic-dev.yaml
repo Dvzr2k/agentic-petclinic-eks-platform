@@ -191,6 +191,11 @@ spec:
 ---
 # Prometheus (monitoring namespace) scrapes every app pod's actuator
 # metrics endpoint on its normal service port.
+#
+# [MED-002 fix, 4th security audit] Was `from: namespaceSelector` only -
+# any pod in monitoring (Grafana, Loki, FluentBit, not just Prometheus)
+# could reach any port on any pod here. Narrowed to just the Prometheus
+# pod specifically, and only the 5 ports it actually scrapes.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -207,3 +212,17 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
