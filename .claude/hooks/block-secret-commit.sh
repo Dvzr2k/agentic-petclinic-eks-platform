@@ -46,6 +46,8 @@ if echo "$COMMAND" | grep -qE 'git\s+(add|commit)'; then
     'aws-credentials'         # AWS credential files
     'credentials\.json'       # Service account credentials
     'credentials\.yaml'       # Credential files
+    '\.tfplan($|\s)'          # Terraform plan files (contain plaintext secrets)
+    '\.plan($|\s)'            # Terraform plan files, non-standard extension
   )
 
   for pattern in "${SECRET_FILE_PATTERNS[@]}"; do
