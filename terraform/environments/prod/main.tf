@@ -120,3 +120,67 @@ module "secrets" {
   environment    = var.environment
   openai_api_key = var.openai_api_key
 }
+
+# -----------------------------------------------------------------------------
+# Karpenter (PETPLAT-73) — IAM/SQS/EventBridge prerequisites for node
+# autoscaling. The Karpenter controller itself (Helm) and NodePool/EC2NodeClass
+# CRDs are applied via kubectl, not Terraform — see k8s/base/karpenter/.
+# -----------------------------------------------------------------------------
+
+module "karpenter" {
+  source = "../../modules/karpenter"
+
+  project           = var.project
+  environment       = var.environment
+  cluster_name      = module.eks.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  node_role_arn     = module.eks.node_role_arn
+
+  tags = {
+    Name = "petclinic-prod-karpenter"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# AWS Budget (PETPLAT-75) — $100/month threshold, alerts at 50/80/100% of
+# ACTUAL spend (not forecasted) so notifications fire on real cost, not a
+# projection.
+# -----------------------------------------------------------------------------
+
+resource "aws_budgets_budget" "monthly" {
+  name         = "petclinic-${var.environment}-monthly-budget"
+  budget_type  = "COST"
+  limit_amount = "100"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  cost_filter {
+    name   = "TagKeyValue"
+    values = [format("user:Environment$%s", var.environment)]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 50
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
+}

@@ -116,3 +116,20 @@ output "openai_secret_arn" {
   value       = module.secrets.openai_secret_arn
   sensitive   = true
 }
+
+# --- Karpenter outputs ---
+
+output "karpenter_role_arn" {
+  description = "ARN of the Karpenter controller's IRSA role — used by the Helm install command"
+  value       = module.karpenter.karpenter_role_arn
+}
+
+output "karpenter_queue_name" {
+  description = "Name of the SQS interruption queue — used by the Helm install command"
+  value       = module.karpenter.karpenter_queue_name
+}
+
+output "karpenter_instance_profile_name" {
+  description = "Name of the instance profile for Karpenter-launched nodes"
+  value       = module.karpenter.karpenter_instance_profile_name
+}

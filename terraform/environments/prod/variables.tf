@@ -38,3 +38,8 @@ variable "openai_api_key" {
   type        = string
   sensitive   = true
 }
+
+variable "budget_alert_email" {
+  description = "Email address notified by the monthly AWS Budget alert (50%/80%/100% thresholds)"
+  type        = string
+}
