@@ -104,6 +104,20 @@ spec:
         app.kubernetes.io/part-of: petclinic
     spec:
       serviceAccountName: fluent-bit
+      # [MED-004 investigated, not applied as originally planned] The
+      # official fluent/fluent-bit image genuinely runs as root by
+      # default (confirmed live: "container has runAsNonRoot and image
+      # will run as root" — Kubernetes correctly refused to start it when
+      # runAsNonRoot: true was set). Unlike Prometheus/Loki/Grafana, this
+      # isn't a missed setting — FluentBit's actual job is reading host
+      # log files across every container on the node, which commonly
+      # requires root-level read access. Left as a known, deliberate
+      # exception rather than forcing something that breaks log
+      # collection entirely. A real fix would mean switching to a
+      # non-root-capable Fluent Bit image/tag, not just this flag.
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # No IRSA annotation on the ServiceAccount above — Loki is in-cluster,
       # no AWS auth required for this output.
       tolerations:
