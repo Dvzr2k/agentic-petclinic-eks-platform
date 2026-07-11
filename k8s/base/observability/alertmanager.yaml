@@ -1,24 +1,16 @@
-# Notification channel is email (spec minimum). SMTP credentials below are
-# placeholders — no real mail server configured yet. This is a plain K8s
-# Secret (not ExternalSecret/Secrets Manager) since this epic is scoped to
-# in-cluster K8s manifests only, no Terraform/AWS resources. Replace with
-# real SMTP creds (or swap the receiver for Slack) before relying on this
-# for real alerts — until then, alerts fire and route correctly but the
-# actual email send will fail silently against the placeholder server.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: alertmanager-smtp
-  namespace: monitoring
-  labels:
-    app.kubernetes.io/name: alertmanager
-    app.kubernetes.io/part-of: petclinic
-type: Opaque
-stringData:
-  smtp-host: "smtp.placeholder-not-configured.example:587"
-  smtp-username: "placeholder@example.com"
-  smtp-password: "placeholder-not-a-real-password"
----
+# [MED-002 fix] The Secret that used to live here (hardcoded SMTP
+# host/username/password, committed to git) is gone. It now comes from
+# ExternalSecret k8s/base/external-secrets/{dev,prod}/alertmanager-smtp.yaml,
+# fed by terraform/modules/secrets/main.tf — same pattern as Grafana's
+# admin credentials. Still placeholder values by default (no real mail
+# server configured), same status quo as before — the fix is the flow,
+# not the current value.
+#
+# smtp_smarthost/smtp_auth_username stay inline below since Alertmanager
+# has no *_file variant for those fields, and a host/username alone (no
+# password) isn't meaningfully exploitable. Only smtp_auth_password_file
+# is used, reading the real secret from a mounted file instead of ever
+# appearing as text in this ConfigMap.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -33,7 +25,7 @@ data:
       smtp_smarthost: "smtp.placeholder-not-configured.example:587"
       smtp_from: "alerts@petclinic.local"
       smtp_auth_username: "placeholder@example.com"
-      smtp_auth_password: "placeholder-not-a-real-password"
+      smtp_auth_password_file: /etc/alertmanager/secrets/smtp-password
 
     route:
       receiver: default-receiver
@@ -118,12 +110,18 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/alertmanager
+            - name: smtp-secret
+              mountPath: /etc/alertmanager/secrets
+              readOnly: true
             - name: storage
               mountPath: /alertmanager
       volumes:
         - name: config
           configMap:
             name: alertmanager-config
+        - name: smtp-secret
+          secret:
+            secretName: alertmanager-smtp
         - name: storage
           emptyDir: {}
 ---

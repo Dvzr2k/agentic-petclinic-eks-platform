@@ -9,3 +9,9 @@ output "grafana_admin_secret_arn" {
   value       = aws_secretsmanager_secret.grafana_admin.arn
   sensitive   = true
 }
+
+output "alertmanager_smtp_secret_arn" {
+  description = "Secrets Manager ARN for Alertmanager SMTP credentials"
+  value       = aws_secretsmanager_secret.alertmanager_smtp.arn
+  sensitive   = true
+}

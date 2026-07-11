@@ -48,3 +48,30 @@ resource "aws_secretsmanager_secret_version" "grafana_admin" {
     admin-password = random_password.grafana_admin.result
   })
 }
+
+# -----------------------------------------------------------------------------
+# Alertmanager SMTP credentials (fixes MED-002 from security-auditor: SMTP
+# host/username/password were hardcoded directly in k8s/base/observability/
+# alertmanager.yaml — the one secret in the repo that bypassed the Secrets
+# Manager -> ExternalSecret -> K8s Secret pattern used everywhere else).
+# Still placeholder values by default — see variables.tf.
+# -----------------------------------------------------------------------------
+
+resource "aws_secretsmanager_secret" "alertmanager_smtp" {
+  name        = "${var.project}/${var.environment}/alertmanager-smtp"
+  description = "Alertmanager SMTP credentials (${var.project}-${var.environment})"
+
+  tags = merge(var.tags, {
+    Name      = "${var.project}-${var.environment}-alertmanager-smtp"
+    Component = "secrets"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "alertmanager_smtp" {
+  secret_id = aws_secretsmanager_secret.alertmanager_smtp.id
+  secret_string = jsonencode({
+    smtp-host     = var.smtp_host
+    smtp-username = var.smtp_username
+    smtp-password = var.smtp_password
+  })
+}

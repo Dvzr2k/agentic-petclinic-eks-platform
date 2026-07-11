@@ -1,0 +1,30 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: alertmanager-smtp
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager-smtp
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: infrastructure
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: alertmanager-smtp
+  data:
+    - secretKey: smtp-host
+      remoteRef:
+        key: petclinic/dev/alertmanager-smtp
+        property: smtp-host
+    - secretKey: smtp-username
+      remoteRef:
+        key: petclinic/dev/alertmanager-smtp
+        property: smtp-username
+    - secretKey: smtp-password
+      remoteRef:
+        key: petclinic/dev/alertmanager-smtp
+        property: smtp-password
