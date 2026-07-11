@@ -1,81 +1,23 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# [MED-001/LOW-002 fix, 4th security audit] Used to also pull in ../../base
+# (the original pre-Helm per-service Deployment/Service/ConfigMap
+# manifests), plus replicas/images/patches blocks rewriting them for prod.
+# Helm + ArgoCD replaced that path entirely (see docs/helm-guide.md) -
+# those manifests were never referenced by any ArgoCD Application and had
+# drifted back to insecure defaults (readOnlyRootFilesystem: false) and a
+# frozen v1.0.0 image tag. Applying this kustomization would have silently
+# overwritten the real, Helm-managed Deployments with that stale, less-
+# secure version - worse in prod than dev, since there's no auto-sync
+# self-heal to revert it. Deleted the dead manifests and this file now
+# only carries what's still genuinely needed: ResourceQuota, LimitRange,
+# HPA, and PDB, which apply by namespace/name and aren't rendered by the
+# Helm chart itself.
 namespace: petclinic-prod
 
 resources:
-  - ../../base
   - resource-quota.yaml
   - limit-range.yaml
   - hpa.yaml
   - pdb.yaml
-
-replicas:
-  - name: config-server
-    count: 2
-  - name: discovery-server
-    count: 2
-  - name: api-gateway
-    count: 2
-  - name: customers-service
-    count: 2
-  - name: visits-service
-    count: 2
-  - name: vets-service
-    count: 2
-  - name: genai-service
-    count: 1
-  - name: admin-server
-    count: 1
-
-# Prod RDS is not deployed yet (E-5 prod wiring is PETPLAT-27, not yet applied).
-# Swap this placeholder for the real endpoint via `terraform output rds_endpoint`
-# in terraform/environments/prod once that environment exists.
-patches:
-  - target:
-      kind: ConfigMap
-      name: customers-service
-    patch: |-
-      - op: replace
-        path: /data/SPRING_DATASOURCE_URL
-        value: "jdbc:mysql://REPLACE-WITH-PROD-RDS-ENDPOINT:3306/petclinic"
-  - target:
-      kind: ConfigMap
-      name: visits-service
-    patch: |-
-      - op: replace
-        path: /data/SPRING_DATASOURCE_URL
-        value: "jdbc:mysql://REPLACE-WITH-PROD-RDS-ENDPOINT:3306/petclinic"
-  - target:
-      kind: ConfigMap
-      name: vets-service
-    patch: |-
-      - op: replace
-        path: /data/SPRING_DATASOURCE_URL
-        value: "jdbc:mysql://REPLACE-WITH-PROD-RDS-ENDPOINT:3306/petclinic"
-
-images:
-  - name: petclinic/config-server
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/config-server
-    newTag: v1.0.0
-  - name: petclinic/discovery-server
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/discovery-server
-    newTag: v1.0.0
-  - name: petclinic/customers-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/customers-service
-    newTag: v1.0.0
-  - name: petclinic/visits-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/visits-service
-    newTag: v1.0.0
-  - name: petclinic/vets-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/vets-service
-    newTag: v1.0.0
-  - name: petclinic/genai-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/genai-service
-    newTag: v1.0.0
-  - name: petclinic/api-gateway
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/api-gateway
-    newTag: v1.0.0
-  - name: petclinic/admin-server
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/admin-server
-    newTag: v1.0.0

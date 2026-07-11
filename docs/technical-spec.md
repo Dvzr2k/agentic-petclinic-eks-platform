@@ -764,7 +764,7 @@ Environment-specific configuration is managed via Helm values files in `helm-val
 - Per-service files hold service-specific config (ports, env vars, init containers)
 - ArgoCD merges service + environment values when deploying
 
-> **Note:** The `k8s/overlays/` directory remains for namespace manifests and external-secrets CRs that are not Helm-managed. See [Helm Charts](#helm-charts) for the full chart structure.
+> **Note:** The `k8s/overlays/` directory remains only for objects the Helm chart doesn't render — `ResourceQuota`, `LimitRange`, and (prod only) `HPA`/`PDB` — which apply by namespace/name rather than being part of a specific release. Namespace manifests and ExternalSecret CRs live directly under `k8s/base/` and are applied with plain `kubectl apply -f`, not through this Kustomize path. The original per-service Deployment/Service/ConfigMap manifests these overlays used to also patch were removed (4th security audit, MED-001) — they predated the Helm chart, were never referenced by any ArgoCD Application, and had drifted out of sync with security fixes made to the real (Helm-rendered) manifests. See [Helm Charts](#helm-charts) for the full chart structure.
 
 ---
 

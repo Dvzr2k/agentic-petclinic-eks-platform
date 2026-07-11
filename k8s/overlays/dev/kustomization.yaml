@@ -1,39 +1,19 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# [MED-001/LOW-002 fix, 4th security audit] Used to also pull in ../../base
+# (the original pre-Helm per-service Deployment/Service/ConfigMap
+# manifests) plus an `images:` rewrite for them. Helm + ArgoCD replaced
+# that path entirely (see docs/helm-guide.md) - those manifests were never
+# referenced by any ArgoCD Application and had drifted back to insecure
+# defaults (readOnlyRootFilesystem: false) and a frozen v1.0.0 image tag.
+# Applying this kustomization would have silently overwritten the real,
+# Helm-managed Deployments with that stale, less-secure version. Deleted
+# the dead manifests and this file now only carries what's still genuinely
+# needed: ResourceQuota and LimitRange, which apply by namespace/name and
+# aren't rendered by the Helm chart itself.
 namespace: petclinic-dev
 
 resources:
-  - ../../base
   - resource-quota.yaml
   - limit-range.yaml
-
-# Dev: 1 replica per service (base default) — no patches needed.
-# Images rewritten from the base placeholder name to the real dev ECR repos.
-# Tag is the initial manual push version; CI (E-10) updates this via helm-values
-# once the build pipeline exists.
-images:
-  - name: petclinic/config-server
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server
-    newTag: v1.0.0
-  - name: petclinic/discovery-server
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/discovery-server
-    newTag: v1.0.0
-  - name: petclinic/customers-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service
-    newTag: v1.0.0
-  - name: petclinic/visits-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/visits-service
-    newTag: v1.0.0
-  - name: petclinic/vets-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/vets-service
-    newTag: v1.0.0
-  - name: petclinic/genai-service
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service
-    newTag: v1.0.0
-  - name: petclinic/api-gateway
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/api-gateway
-    newTag: v1.0.0
-  - name: petclinic/admin-server
-    newName: 092443461861.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/admin-server
-    newTag: v1.0.0
