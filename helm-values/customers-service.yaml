@@ -14,6 +14,10 @@ configMap:
 env:
   - name: SPRING_PROFILES_ACTIVE
     value: docker,mysql
+  - name: MANAGEMENT_ZIPKIN_TRACING_ENDPOINT
+    value: http://zipkin.tracing:9411/api/v2/spans
+  - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+    value: "1.0"
   - name: SPRING_DATASOURCE_USERNAME
     valueFrom:
       secretKeyRef:

@@ -1,0 +1,144 @@
+# Notification channel is email (spec minimum). SMTP credentials below are
+# placeholders — no real mail server configured yet. This is a plain K8s
+# Secret (not ExternalSecret/Secrets Manager) since this epic is scoped to
+# in-cluster K8s manifests only, no Terraform/AWS resources. Replace with
+# real SMTP creds (or swap the receiver for Slack) before relying on this
+# for real alerts — until then, alerts fire and route correctly but the
+# actual email send will fail silently against the placeholder server.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-smtp
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: petclinic
+type: Opaque
+stringData:
+  smtp-host: "smtp.placeholder-not-configured.example:587"
+  smtp-username: "placeholder@example.com"
+  smtp-password: "placeholder-not-a-real-password"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: petclinic
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: "smtp.placeholder-not-configured.example:587"
+      smtp_from: "alerts@petclinic.local"
+      smtp_auth_username: "placeholder@example.com"
+      smtp_auth_password: "placeholder-not-a-real-password"
+
+    route:
+      receiver: default-receiver
+      group_by: ["alertname", "job"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - match:
+            severity: critical
+          receiver: default-receiver
+          group_wait: 10s
+          repeat_interval: 1h
+        - match:
+            severity: warning
+          receiver: default-receiver
+          group_interval: 5m
+
+    receivers:
+      - name: default-receiver
+        email_configs:
+          - to: "oncall@petclinic.local"
+            send_resolved: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+        app.kubernetes.io/part-of: petclinic
+    spec:
+      securityContext:
+        fsGroup: 65534
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports:
+            - name: http
+              containerPort: 9093
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: storage
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/part-of: petclinic
+spec:
+  selector:
+    app.kubernetes.io/name: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http

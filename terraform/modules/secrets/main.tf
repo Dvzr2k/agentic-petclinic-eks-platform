@@ -16,3 +16,35 @@ resource "aws_secretsmanager_secret_version" "openai_api_key" {
   secret_id     = aws_secretsmanager_secret.openai_api_key.id
   secret_string = var.openai_api_key
 }
+
+# -----------------------------------------------------------------------------
+# Grafana admin credentials (fixes CRIT-001 from security-auditor: the admin
+# password was previously hardcoded directly in k8s/base/observability/
+# grafana.yaml and committed to git). Generated randomly here instead, flows
+# through Secrets Manager -> ExternalSecret -> K8s Secret, same pattern as
+# the OpenAI key and RDS credentials above.
+# -----------------------------------------------------------------------------
+
+resource "random_password" "grafana_admin" {
+  length           = 24
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}|:?"
+}
+
+resource "aws_secretsmanager_secret" "grafana_admin" {
+  name        = "${var.project}/${var.environment}/grafana-admin"
+  description = "Grafana admin credentials (${var.project}-${var.environment})"
+
+  tags = merge(var.tags, {
+    Name      = "${var.project}-${var.environment}-grafana-admin"
+    Component = "secrets"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "grafana_admin" {
+  secret_id = aws_secretsmanager_secret.grafana_admin.id
+  secret_string = jsonencode({
+    admin-user     = "admin"
+    admin-password = random_password.grafana_admin.result
+  })
+}
