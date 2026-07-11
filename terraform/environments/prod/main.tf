@@ -56,12 +56,13 @@ module "vpc" {
 module "eks" {
   source = "../../modules/eks"
 
-  project         = var.project
-  environment     = var.environment
-  cluster_version = "1.34"
-  subnet_ids      = module.vpc.public_subnet_ids
-  cluster_sg_id   = module.vpc.eks_cluster_sg_id
-  node_sg_id      = module.vpc.eks_node_sg_id
+  project             = var.project
+  environment         = var.environment
+  cluster_version     = "1.34"
+  subnet_ids          = module.vpc.public_subnet_ids
+  cluster_sg_id       = module.vpc.eks_cluster_sg_id
+  node_sg_id          = module.vpc.eks_node_sg_id
+  public_access_cidrs = var.eks_public_access_cidrs
 
   node_instance_types = ["t4g.small"]
   node_ami_type       = "AL2023_ARM_64_STANDARD"

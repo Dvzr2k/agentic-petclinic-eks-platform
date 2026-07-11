@@ -49,3 +49,8 @@ variable "budget_alert_email" {
   description = "Email address notified by the monthly AWS Budget alert (50%/80%/100% thresholds)"
   type        = string
 }
+
+variable "eks_public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the EKS public API endpoint (security-auditor HIGH-002). Set your real IP(s) in terraform.tfvars, not here — no default on purpose."
+  type        = list(string)
+}

@@ -51,6 +51,10 @@ resource "aws_eks_cluster" "main" {
     security_group_ids      = [var.cluster_sg_id]
     endpoint_public_access  = true
     endpoint_private_access = false
+    # [HIGH-002 fix] Was unset, defaulting to 0.0.0.0/0 (reachable from
+    # the whole internet). IAM auth is still required to do anything once
+    # connected, but this removes that extra network-layer barrier.
+    public_access_cidrs = var.public_access_cidrs
   }
 
   access_config {
@@ -364,8 +368,12 @@ resource "aws_iam_role" "eso" {
 
 resource "aws_iam_policy" "eso_secrets_access" {
   name        = "${local.name_prefix}-eso-secrets-policy"
-  description = "Allow External Secrets Operator to read petclinic secrets from Secrets Manager"
+  description = "Allow External Secrets Operator to read ${var.environment}-only secrets from Secrets Manager"
 
+  # [HIGH-001 fix] Scoped to this environment's secrets only
+  # (petclinic/dev/* or petclinic/prod/*), not the whole project
+  # (petclinic/*). The prior wildcard let dev's ESO identity read prod
+  # secrets and vice versa once both environments exist.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -374,7 +382,7 @@ resource "aws_iam_policy" "eso_secrets_access" {
         "secretsmanager:GetSecretValue",
         "secretsmanager:DescribeSecret",
       ]
-      Resource = "arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/*"
+      Resource = "arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/*"
     }]
   })
 

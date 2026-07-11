@@ -30,6 +30,11 @@ variable "cluster_sg_id" {
   type        = string
 }
 
+variable "public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the EKS public API endpoint (security-auditor HIGH-002 — no default, must be set explicitly, since 0.0.0.0/0 is what created the finding)"
+  type        = list(string)
+}
+
 variable "node_sg_id" {
   description = "Security group ID for the EKS worker nodes"
   type        = string
