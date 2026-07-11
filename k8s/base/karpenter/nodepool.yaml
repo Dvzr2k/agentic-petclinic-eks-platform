@@ -1,0 +1,65 @@
+# Capacity type is on-demand only while the Graviton free trial is active —
+# Spot provides zero savings on already-free nodes. See nodepool-spot-dev.yaml
+# for the dev override to apply once the trial expires.
+#
+# This file is dev-specific: the discovery tag value and instance profile
+# name below are literal strings (plain YAML, no Helm templating), not a
+# {env} placeholder. A prod copy would need "petclinic-prod" substituted in
+# both the subnet/SG selectors and the instanceProfile name.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t4g.small", "t4g.medium"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  limits:
+    # REQUIRED — without a cap, Karpenter has no upper bound and could
+    # provision far more nodes than intended for a single large workload.
+    cpu: "8"
+    memory: 32Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
+  # These tags must exist on the actual VPC subnets/security groups (added in
+  # terraform/modules/vpc/) — if missing, Karpenter finds no matching network
+  # resources and node provisioning fails silently, with no error surfaced
+  # anywhere obvious.
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: petclinic-dev
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: petclinic-dev
+  # Must match exactly what terraform/modules/karpenter/ creates — a mismatch
+  # means the node launches in EC2 but its kubelet can never authenticate to
+  # join the cluster.
+  instanceProfile: petclinic-dev-karpenter-node-profile
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 20Gi
+        volumeType: gp3

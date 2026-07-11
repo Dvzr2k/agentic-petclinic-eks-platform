@@ -1,0 +1,30 @@
+# Karpenter is installed via Helm, not a raw Kubernetes manifest — this file
+# documents the exact install command, it is not something you `kubectl apply`.
+#
+# Prerequisite: terraform/modules/karpenter/ (PETPLAT-73 Terraform half) must
+# already be applied — this command reads its outputs directly.
+#
+#   cd terraform/environments/dev && terraform apply
+#
+# Then, from the repo root:
+#
+#   helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+#     --version 1.0.0 \
+#     --namespace kube-system \
+#     --set settings.clusterName=$(cd terraform/environments/dev && terraform output -raw cluster_name) \
+#     --set settings.interruptionQueue=$(cd terraform/environments/dev && terraform output -raw karpenter_queue_name) \
+#     --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(cd terraform/environments/dev && terraform output -raw karpenter_role_arn)
+#
+# Real value already known right now (Terraform applied for the EKS module):
+#   settings.clusterName = petclinic-dev
+#
+# Not yet known — the karpenter Terraform module itself hasn't been applied
+# yet, so these two outputs don't exist until it is:
+#   settings.interruptionQueue        <- from module.karpenter.karpenter_queue_name
+#   serviceAccount.annotations."eks\.amazonaws\.com/role-arn"  <- from module.karpenter.karpenter_role_arn
+#
+# Namespace: kube-system (same namespace as the ServiceAccount referenced above)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-system
