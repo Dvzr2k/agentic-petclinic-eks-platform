@@ -1,0 +1,24 @@
+# [MED-004 fix] Structural boundary for dev — previously all 16
+# Applications shared ArgoCD's built-in unrestricted "default" project,
+# so isolation between dev and prod depended entirely on the "-dev"/"-prod"
+# naming convention, not an actual enforced restriction. This AppProject
+# makes it structural: a "petclinic-dev" Application can only ever target
+# the petclinic-dev namespace, from this one repo.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: petclinic-dev
+  namespace: argocd
+spec:
+  description: Petclinic dev environment — auto-sync applications only
+  sourceRepos:
+    - https://github.com/Dvzr2k/agentic-petclinic-eks-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: petclinic-dev
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

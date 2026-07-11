@@ -1,0 +1,29 @@
+# Apply only to the prod EKS cluster, never to dev's — same object name
+# ("grafana-admin" in "monitoring") as dev/grafana-admin.yaml, since each
+# lives on its own separate cluster with its own "monitoring" namespace.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: grafana-admin
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana-admin
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: infrastructure
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: grafana-admin
+  data:
+    - secretKey: admin-user
+      remoteRef:
+        key: petclinic/prod/grafana-admin
+        property: admin-user
+    - secretKey: admin-password
+      remoteRef:
+        key: petclinic/prod/grafana-admin
+        property: admin-password

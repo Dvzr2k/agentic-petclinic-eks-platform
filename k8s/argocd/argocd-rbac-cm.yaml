@@ -18,9 +18,16 @@ data:
     p, role:admin, logs, get, */*, allow
     p, role:admin, exec, create, */*, allow
 
+    # [MED-004 fix] Scoped to the petclinic-dev AppProject itself, not just
+    # app names matching "*-dev". Previously "default/*-dev" only worked
+    # because every Application happened to follow that naming convention —
+    # a misnamed or new Application could have slipped through. Now the
+    # restriction is structural: petclinic-dev Applications can only ever
+    # target the petclinic-dev namespace (enforced by the AppProject), so
+    # scoping RBAC to that project is a real boundary, not a naming hope.
     p, role:developer, applications, get, */*, allow
-    p, role:developer, applications, sync, default/*-dev, allow
-    p, role:developer, logs, get, default/*-dev, allow
+    p, role:developer, applications, sync, petclinic-dev/*, allow
+    p, role:developer, logs, get, petclinic-dev/*, allow
     p, role:developer, projects, get, *, allow
 
     g, admin, role:admin

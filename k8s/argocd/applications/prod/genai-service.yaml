@@ -4,7 +4,7 @@ metadata:
   name: genai-service-prod
   namespace: argocd
 spec:
-  project: default
+  project: petclinic-prod
   source:
     repoURL: https://github.com/Dvzr2k/agentic-petclinic-eks-platform.git
     targetRevision: main

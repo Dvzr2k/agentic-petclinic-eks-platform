@@ -4,7 +4,7 @@ metadata:
   name: discovery-server-dev
   namespace: argocd
 spec:
-  project: default
+  project: petclinic-dev
   source:
     repoURL: https://github.com/Dvzr2k/agentic-petclinic-eks-platform.git
     targetRevision: main

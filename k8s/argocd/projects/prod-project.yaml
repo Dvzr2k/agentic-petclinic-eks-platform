@@ -1,0 +1,22 @@
+# [MED-004 fix] Same structural boundary as dev-project.yaml, but for prod.
+# A "petclinic-prod" Application can only ever target the petclinic-prod
+# namespace — this is now enforced by ArgoCD itself, not just by the
+# "-prod" naming convention in argocd-rbac-cm.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: petclinic-prod
+  namespace: argocd
+spec:
+  description: Petclinic prod environment — manual-sync applications only
+  sourceRepos:
+    - https://github.com/Dvzr2k/agentic-petclinic-eks-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: petclinic-prod
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
