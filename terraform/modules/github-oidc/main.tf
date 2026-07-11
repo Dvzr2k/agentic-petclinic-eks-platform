@@ -89,6 +89,23 @@ resource "aws_iam_role_policy" "ecr_push" {
           "ecr:CompleteLayerUpload",
         ]
         Resource = "arn:${data.aws_partition.current.partition}:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.project}-*"
+      },
+      {
+        # [IAM review fix] ECR repos are now encrypted with a customer-
+        # managed KMS key (Checkov CKV_AWS_136 fix, terraform/modules/ecr)
+        # instead of the default AWS-owned key. Pushing a layer means ECR
+        # calls KMS to encrypt it on this role's behalf - without this,
+        # the next real CI push would fail with AccessDenied on the KMS
+        # key, same class of gap already caught for the node role's pulls.
+        Sid      = "ECRPushKMS"
+        Effect   = "Allow"
+        Action   = ["kms:Encrypt", "kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ecr.${data.aws_region.current.name}.amazonaws.com"
+          }
+        }
       }
     ]
   })
