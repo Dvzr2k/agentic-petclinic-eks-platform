@@ -1,0 +1,23 @@
+# [PETPLAT-89 fix] Safety net only — every current container already sets
+# its own requests/limits explicitly (helm/petclinic-service/values.yaml),
+# so this changes nothing today. It exists for whatever gets created
+# *without* explicit limits later (a manual debug pod, a new service that
+# forgets to set them) so it inherits a sane default instead of running
+# unbounded within the namespace ResourceQuota.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: petclinic-limits
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 384Mi
+      default:
+        cpu: 400m
+        memory: 512Mi

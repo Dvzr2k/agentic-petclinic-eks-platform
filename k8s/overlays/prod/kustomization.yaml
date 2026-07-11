@@ -6,6 +6,7 @@ namespace: petclinic-prod
 resources:
   - ../../base
   - resource-quota.yaml
+  - limit-range.yaml
   - hpa.yaml
   - pdb.yaml
 
