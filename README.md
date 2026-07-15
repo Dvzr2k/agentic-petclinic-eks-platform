@@ -10,6 +10,57 @@ An end-to-end AWS platform covering infrastructure (Terraform), container orches
 
 All infrastructure code in this repo was written with Claude Code. Every Terraform module, Kubernetes manifest, Helm chart, and CI/CD pipeline was reviewed, validated (`terraform plan`, `helm template`, `kubectl apply --dry-run`), and corrected before applying — an AI-assisted, agentic workflow, not AI-generated-and-unchecked code.
 
+## Architecture
+
+Solid arrows are live runtime calls (request path, SQL). Dashed arrows are build, deploy, or watch relationships (CI push, ArgoCD sync, secret sync). Dev and prod share this shape — prod differs only in replica counts, HPA, and manual ArgoCD sync.
+
+```mermaid
+flowchart TD
+    CLIENT["Client (Browser)"]
+    R53["Route 53<br/>petclinic.app-valdezr.link"]
+    ACM["ACM — TLS cert"]
+    ALB["ALB — Ingress<br/>public subnet"]
+
+    subgraph ACCOUNT["AWS Account · eu-central-1"]
+        subgraph VPC["VPC 10.0.0.0/16 — public subnets only, no NAT"]
+            subgraph EKS["EKS Cluster — petclinic-{env}"]
+                APIGW["API Gateway :8080"]
+                CFG["Config Server :8888"]
+                DISC["Discovery Server :8761"]
+                ADMIN["Admin Server :9090"]
+                CUST["Customers Svc :8081"]
+                VIS["Visits Svc :8082"]
+                VETS["Vets Svc :8083"]
+                GENAI["GenAI Svc :8084"]
+                ARGOCD["ArgoCD"]
+                OBS["Prometheus · Grafana · Loki · Zipkin"]
+            end
+            RDS["RDS MySQL<br/>shared · single-AZ"]
+        end
+        ECR["ECR — image registry"]
+        SECRETS["Secrets Manager"]
+    end
+
+    GHREPO["GitHub — platform repo"]
+    GHA["GitHub Actions<br/>build → scan → push"]
+
+    CLIENT --> R53 --> ALB
+    ACM -.-> ALB
+    ALB --> APIGW
+    CFG --> DISC
+    APIGW --> CUST
+    APIGW --> VIS
+    APIGW --> VETS
+    APIGW --> GENAI
+    CUST --> RDS
+    VIS --> RDS
+    VETS -->|SQL| RDS
+    ECR -.->|image pull| EKS
+    SECRETS -.->|secret sync| EKS
+    GHA -.->|push image| ECR
+    GHREPO -.->|watches & syncs| ARGOCD
+```
+
 ## Repository Structure
 
 ```
