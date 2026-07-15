@@ -1,0 +1,50 @@
+# Prod copy of ingress.yaml (dev). The certificate ARN and ALB security
+# group ID can't be known until `terraform apply` has actually run for
+# prod — filled in here as clearly-marked placeholders, same convention
+# install-lb-controller.sh's own printed instructions already use.
+#
+# host must match exactly what's hardcoded in
+# terraform/environments/prod/main.tf's aws_route53_record.petclinic_prod
+# ("petclinic.${var.domain_name}", no "-prod" suffix — unlike everything
+# else in this project, that one hostname doesn't follow the {env}
+# prefix pattern).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: petclinic-ingress
+  namespace: petclinic-prod
+  labels:
+    app.kubernetes.io/name: petclinic-ingress
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # Paste the value of: terraform output -raw certificate_arn
+    alb.ingress.kubernetes.io/certificate-arn: "REPLACE_WITH_ACM_CERTIFICATE_ARN"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-port: "8080"
+    # Use the pre-created ALB security group from the VPC module.
+    # Paste the value of: terraform output -raw alb_sg_id
+    alb.ingress.kubernetes.io/security-groups: "REPLACE_WITH_ALB_SG_ID"
+    # Unique tag so the Terraform data "aws_lb" lookup finds exactly this
+    # ALB. Same tag *value* as dev is fine - the lookup also matches on
+    # the cluster-ownership tag the LB controller adds automatically
+    # (kubernetes.io/cluster/petclinic-prod=owned), which disambiguates
+    # from dev's ALB even though this "Ingress" tag string is identical.
+    alb.ingress.kubernetes.io/tags: "Ingress=petclinic-ingress"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: petclinic.app-valdezr.link
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

@@ -6,9 +6,17 @@
 #
 # Run from petclinic-platform/ after terraform apply has provisioned EKS
 # and the eso_role_arn output (PETPLAT-37) is available.
+#
+# Usage: ./scripts/install-eso.sh <dev|prod>
 set -euo pipefail
 
-CLUSTER_NAME="petclinic-dev"
+if [[ $# -ne 1 || ( "$1" != "dev" && "$1" != "prod" ) ]]; then
+  echo "Usage: $0 <dev|prod>"
+  exit 1
+fi
+ENVIRONMENT="$1"
+
+CLUSTER_NAME="petclinic-${ENVIRONMENT}"
 REGION="eu-central-1"
 NAMESPACE="external-secrets"
 SA_NAME="external-secrets-sa"
@@ -18,7 +26,7 @@ echo "==> Configuring kubectl for cluster ${CLUSTER_NAME}"
 aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${REGION}"
 
 echo "==> Fetching ESO IRSA role ARN (terraform output: eso_role_arn)"
-ROLE_ARN=$(terraform -chdir=terraform/environments/dev output -raw eso_role_arn)
+ROLE_ARN=$(terraform -chdir="terraform/environments/${ENVIRONMENT}" output -raw eso_role_arn)
 echo "    Role ARN: ${ROLE_ARN}"
 
 echo "==> Creating namespace ${NAMESPACE}"
@@ -55,13 +63,15 @@ kubectl rollout status deployment/external-secrets -n "${NAMESPACE}" --timeout=1
 # ---------------------------------------------------------------------------
 echo "==> Applying ClusterSecretStore and ExternalSecret CRs"
 kubectl apply -f k8s/base/external-secrets/cluster-secret-store.yaml
-kubectl apply -f k8s/base/external-secrets/rds-credentials.yaml
-kubectl apply -f k8s/base/external-secrets/openai-api-key.yaml
+# [Bug fix] These moved to per-env subdirectories (dev/prod ExternalSecret
+# split) - was still pointing at the old flat paths, which no longer exist.
+kubectl apply -f "k8s/base/external-secrets/${ENVIRONMENT}/rds-credentials.yaml"
+kubectl apply -f "k8s/base/external-secrets/${ENVIRONMENT}/openai-api-key.yaml"
 
 echo ""
 echo "==> Verifying: synced K8s Secrets"
-kubectl get externalsecret -n petclinic-dev
-kubectl get secret rds-credentials openai-api-key -n petclinic-dev
+kubectl get externalsecret -n "petclinic-${ENVIRONMENT}"
+kubectl get secret rds-credentials openai-api-key -n "petclinic-${ENVIRONMENT}"
 
 echo ""
 echo "Done. ESO ${CHART_VERSION} is running in namespace ${NAMESPACE}."

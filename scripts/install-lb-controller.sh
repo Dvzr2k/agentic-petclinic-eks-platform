@@ -4,7 +4,15 @@
 #
 # Run from petclinic-platform/ after terraform apply has provisioned EKS.
 # Re-running is safe — create commands fall back to existing resources.
+#
+# Usage: ./scripts/install-lb-controller.sh <dev|prod>
 set -euo pipefail
+
+if [[ $# -ne 1 || ( "$1" != "dev" && "$1" != "prod" ) ]]; then
+  echo "Usage: $0 <dev|prod>"
+  exit 1
+fi
+ENVIRONMENT="$1"
 
 # Application version tag (used for CRD URL on GitHub).
 # IMPORTANT: use the application version (v2.x.x), NOT the Helm chart version (1.x.x).
@@ -12,10 +20,10 @@ set -euo pipefail
 APP_VERSION="v2.8.2"
 CHART_VERSION="1.8.2"
 
-CLUSTER_NAME="petclinic-dev"
+CLUSTER_NAME="petclinic-${ENVIRONMENT}"
 REGION="eu-central-1"
-ROLE_NAME="petclinic-dev-lb-controller-role"
-POLICY_NAME="petclinic-dev-lb-controller-policy"
+ROLE_NAME="petclinic-${ENVIRONMENT}-lb-controller-role"
+POLICY_NAME="petclinic-${ENVIRONMENT}-lb-controller-policy"
 SA_NAME="aws-load-balancer-controller"
 SA_NAMESPACE="kube-system"
 
@@ -110,7 +118,7 @@ helm repo update eks
 
 VPC_ID=$(aws ec2 describe-vpcs \
   --region "${REGION}" \
-  --filters "Name=tag:Name,Values=petclinic-dev-vpc" \
+  --filters "Name=tag:Name,Values=petclinic-${ENVIRONMENT}-vpc" \
   --query "Vpcs[0].VpcId" \
   --output text)
 
@@ -140,11 +148,15 @@ kubectl get ingressclass alb
 echo ""
 echo "Done. LB Controller ${APP_VERSION} is running."
 echo ""
+INGRESS_FILE="k8s/base/ingress/ingress.yaml"
+if [[ "${ENVIRONMENT}" == "prod" ]]; then
+  INGRESS_FILE="k8s/base/ingress/ingress-prod.yaml"
+fi
 echo "Next steps:"
-echo "  1. Fill in k8s/base/ingress/ingress.yaml placeholders:"
-echo "       cd terraform/environments/dev"
+echo "  1. Fill in ${INGRESS_FILE} placeholders:"
+echo "       cd terraform/environments/${ENVIRONMENT}"
 echo "       terraform output -raw certificate_arn   # → REPLACE_WITH_ACM_CERTIFICATE_ARN"
 echo "       terraform output -raw alb_sg_id         # → REPLACE_WITH_ALB_SG_ID"
-echo "  2. kubectl apply -f k8s/base/ingress/ingress.yaml"
+echo "  2. kubectl apply -f ${INGRESS_FILE}"
 echo "  3. Wait ~3 min for ALB to provision, then:"
 echo "       terraform apply -var=\"create_alb_dns_record=true\""
