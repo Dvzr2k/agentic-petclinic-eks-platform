@@ -1,6 +1,14 @@
-# Petclinic Platform — AWS Infrastructure
+# Agentic Petclinic EKS Platform
 
 Production AWS infrastructure for [Spring Petclinic Microservices](https://github.com/spring-petclinic/spring-petclinic-microservices) (8 services, Spring Boot, Spring Cloud).
+
+## Overview
+
+An end-to-end AWS platform covering infrastructure (Terraform), container orchestration (EKS), packaging (Helm), GitOps delivery (ArgoCD), CI (GitHub Actions), and full observability (Prometheus/Grafana/Loki/Zipkin) — built across separate dev and prod environments. The full scope of work is tracked in a [108-story Jira backlog](docs/jira-backlog.md) spanning 16 epics, from remote state and networking through security hardening, autoscaling, and GitOps.
+
+## Built With Claude Code
+
+All infrastructure code in this repo was written with Claude Code. Every Terraform module, Kubernetes manifest, Helm chart, and CI/CD pipeline was reviewed, validated (`terraform plan`, `helm template`, `kubectl apply --dry-run`), and corrected before applying — an AI-assisted, agentic workflow, not AI-generated-and-unchecked code.
 
 ## Repository Structure
 
@@ -22,10 +30,10 @@ petclinic-platform/
 │   │       ├── backend.tf        # S3 state: petclinic/prod/terraform.tfstate
 │   │       └── terraform.tfvars
 │   └── modules/                  # Reusable modules
-│       ├── vpc/                  # VPC, subnets, IGW, security groups (all-public, no NAT)
-│       ├── eks/                  # EKS cluster, node groups, OIDC, IAM
-│       ├── ecr/                  # ECR repos (per service per env), lifecycle policies
-│       ├── rds/                  # RDS MySQL, subnet group, parameter group
+│       ├── vpc/                  # VPC, subnets, IGW, security groups (all-public, no NAT), flow logs
+│       ├── eks/                  # EKS cluster, node groups, OIDC/IRSA, KMS-encrypted secrets
+│       ├── ecr/                  # ECR repos (per service per env), lifecycle policies, KMS encryption
+│       ├── rds/                  # RDS MySQL, KMS-encrypted credentials, enhanced monitoring, TLS enforced
 │       ├── dns/                  # Route 53, ACM certificates
 │       ├── secrets/              # Secrets Manager resources
 │       └── observability/        # Prometheus, Grafana, CloudWatch, FluentBit
@@ -58,7 +66,8 @@ petclinic-platform/
 │
 ├── scripts/                      # Operational scripts
 │   ├── bootstrap-state.sh        # Create S3 bucket + DynamoDB for TF state
-│   └── ecr-login.sh              # ECR authentication helper
+│   ├── ecr-login.sh              # ECR authentication helper
+│   └── build-push-images.sh      # Build (ARM64) + push all 8 service images to ECR
 │
 └── docs/                         # Operational Documentation
     ├── architecture.md           # Infrastructure architecture & diagrams
@@ -91,7 +100,7 @@ petclinic-platform/
 
 ## Environments
 
-| Environment | K8s Namespace | RDS | Purpose |
-|-------------|---------------|-----|---------|
-| dev | `petclinic-dev` | db.t4g.micro, single-AZ (free tier) | Development & testing |
-| prod | `petclinic-prod` | db.t4g.micro, single-AZ (free tier) | Production |
+| Environment | Namespace | VPC CIDR | RDS | Replicas / Scaling | Sync Policy |
+|-------------|-----------|----------|-----|---------------------|-------------|
+| **dev** | `petclinic-dev` | `10.0.0.0/16` | db.t4g.micro, single-AZ (free tier) | 1 per service, no HPA | Auto-sync + self-heal |
+| **prod** | `petclinic-prod` | `10.1.0.0/16` | db.t4g.micro, single-AZ (free tier) | 2 per service + HPA (most) | Manual approval |
