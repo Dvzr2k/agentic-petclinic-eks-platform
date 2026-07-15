@@ -155,3 +155,8 @@ petclinic-platform/
 |-------------|-----------|----------|-----|---------------------|-------------|
 | **dev** | `petclinic-dev` | `10.0.0.0/16` | db.t4g.micro, single-AZ (free tier) | 1 per service, no HPA | Auto-sync + self-heal |
 | **prod** | `petclinic-prod` | `10.1.0.0/16` | db.t4g.micro, single-AZ (free tier) | 2 per service + HPA (most) | Manual approval |
+
+## Credits
+
+Built as the capstone for a DevOps/Cloud Engineering course taught by **Pravin Mishra**, whose
+teaching made this project possible.
