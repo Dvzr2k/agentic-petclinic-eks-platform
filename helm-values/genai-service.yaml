@@ -7,7 +7,6 @@
 component: service
 image:
   name: genai-service
-  tag: "6565517"
 service:
   port: 8084
 configMap:
