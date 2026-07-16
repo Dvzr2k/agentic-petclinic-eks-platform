@@ -10,10 +10,24 @@
 #
 #   helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
 #     --version 1.0.0 \
-#     --namespace kube-system \
+#     --namespace kube-system --no-hooks \
 #     --set settings.clusterName=$(cd terraform/environments/dev && terraform output -raw cluster_name) \
 #     --set settings.interruptionQueue=$(cd terraform/environments/dev && terraform output -raw karpenter_queue_name) \
 #     --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(cd terraform/environments/dev && terraform output -raw karpenter_role_arn)
+#
+#   kubectl patch customresourcedefinitions nodepools.karpenter.sh --type='merge' \
+#     -p '{"spec":{"conversion":{"strategy":"Webhook","webhook":{"conversionReviewVersions":["v1beta1","v1"],"clientConfig":{"service":{"name":"karpenter","port":8443,"namespace":"kube-system"}}}}}}'
+#   kubectl patch customresourcedefinitions nodeclaims.karpenter.sh --type='merge' \
+#     -p '{"spec":{"conversion":{"strategy":"Webhook","webhook":{"conversionReviewVersions":["v1beta1","v1"],"clientConfig":{"service":{"name":"karpenter","port":8443,"namespace":"kube-system"}}}}}}'
+#
+# [Incident #11, see docs/incident-playbook.md] --no-hooks + the two manual
+# patches ABOVE are required, not optional. The chart's default post-install
+# hook Job runs `public.ecr.aws/bitnami/kubectl:1.30` to apply these same two
+# patches — that entire image repository was discontinued (Broadcom cut most
+# free Bitnami images in 2025) and no longer has any tags at all. The Job
+# will loop forever on ImagePullBackOff and the Helm release will never
+# leave "pending-install" unless hooks are skipped and the patches applied
+# directly, as above.
 #
 # Real value already known right now (Terraform applied for the EKS module):
 #   settings.clusterName = petclinic-dev

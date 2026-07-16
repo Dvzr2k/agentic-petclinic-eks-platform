@@ -20,6 +20,7 @@ record of the debugging that went into this project.
 8. [Terraform state lock blocks a second concurrent command](#8-terraform-state-lock-blocks-a-second-concurrent-command)
 9. [EC2 vCPU quota silently blocks Karpenter from scaling](#9-ec2-vcpu-quota-silently-blocks-karpenter-from-scaling)
 10. [Dead pre-Helm manifests silently drifting from real config](#10-dead-pre-helm-manifests-silently-drifting-from-real-config)
+11. [Karpenter's post-install hook permanently broken by a discontinued image](#11-karpenters-post-install-hook-permanently-broken-by-a-discontinued-image)
 
 ---
 
@@ -182,3 +183,30 @@ ConditionalCheckFailedException: The conditional request failed
 **Fix:** Deleted all 33 dead manifest files, then removed the now-pointless `../../base` reference and the `images`/`replicas`/`patches` blocks from both `kustomization.yaml` files — keeping only what those overlays still genuinely needed (`ResourceQuota`, `LimitRange`, and prod's `HPA`/`PDB`). Verified via `kubectl kustomize` that both overlays render *only* those objects afterward.
 
 **Lesson:** A migration to a new deployment mechanism (Helm, in this case) isn't complete until the *old* mechanism's artifacts are actually removed — "unused" and "harmless" are not the same thing if the old path can still technically be triggered.
+
+---
+
+## 11. Karpenter's post-install hook permanently broken by a discontinued image
+
+**When:** Recreating dev from scratch after a full destroy/apply cycle, installing Karpenter via Helm
+**Symptom:** `helm upgrade --install karpenter ...` never completes — the release sits at `pending-install` indefinitely. Killing and retrying the command reproduces the same hang every time, even though the Karpenter controller pods themselves show `Running`/`1/1` the whole time.
+**Root cause:** The chart's post-install hook is a Job that runs `public.ecr.aws/bitnami/kubectl:1.30@sha256:13a2ad1bd37ce42ee2a6f1ab0d30595f42eb7fe4a90d6ec848550524104a1ed6` to patch two CRDs (`nodepools.karpenter.sh`, `nodeclaims.karpenter.sh`) with webhook-conversion config. That image fails to pull with `401 Unauthorized`/`not found` — checking the registry directly (`curl https://public.ecr.aws/v2/bitnami/kubectl/tags/list`) shows the entire repository has **zero tags**. Broadcom (which owns Bitnami via the VMware acquisition) discontinued most free Bitnami container images in 2025; this isn't a transient outage, the image is permanently gone. Helm's `--wait` behavior blocks the release from being marked `deployed` until every hook Job succeeds, so it hangs forever on a Job that can never succeed.
+
+**Fix:** Skip the hook and apply what it would have done directly — no third-party image involved at all:
+```bash
+helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+  --version 1.0.0 --namespace kube-system --no-hooks \
+  --set settings.clusterName=<cluster_name> \
+  --set settings.interruptionQueue=<karpenter_queue_name> \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=<karpenter_role_arn>
+
+kubectl patch customresourcedefinitions nodepools.karpenter.sh --type='merge' \
+  -p '{"spec":{"conversion":{"strategy":"Webhook","webhook":{"conversionReviewVersions":["v1beta1","v1"],"clientConfig":{"service":{"name":"karpenter","port":8443,"namespace":"kube-system"}}}}}}'
+kubectl patch customresourcedefinitions nodeclaims.karpenter.sh --type='merge' \
+  -p '{"spec":{"conversion":{"strategy":"Webhook","webhook":{"conversionReviewVersions":["v1beta1","v1"],"clientConfig":{"service":{"name":"karpenter","port":8443,"namespace":"kube-system"}}}}}}'
+```
+If a release is already stuck from a prior attempt, clear it first: `kubectl delete secret sh.helm.release.v1.karpenter.v1 -n kube-system` (safe — the underlying Kubernetes resources it tracked are untouched by deleting Helm's own bookkeeping secret).
+
+**Verify:** `helm list -n kube-system` shows `karpenter` with `STATUS: deployed`, not `pending-install`.
+
+**Lesson:** A pinned third-party image (even by digest, even from a name-brand vendor) is an external dependency that can disappear entirely, not just drift. Don't chase a replacement image when the alternative — doing the two lines of actual work the hook performs, with tools already in the cluster — removes the dependency instead of relocating it.
