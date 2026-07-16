@@ -1,17 +1,14 @@
 # api-gateway: the only publicly-exposed service (via ALB Ingress). Higher
 # CPU than the other services since it handles all incoming traffic routing.
 component: gateway
-
 image:
   name: api-gateway
-
+  tag: bac6aa4
 service:
   port: 8080
-
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
   DISCOVERY_SERVER_URL: "http://discovery-server:8761"
-
 env:
   - name: SPRING_PROFILES_ACTIVE
     value: docker
@@ -19,13 +16,11 @@ env:
     value: http://zipkin.tracing:9411/api/v2/spans
   - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
     value: "1.0"
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
-
 resources:
   requests:
     cpu: 200m
