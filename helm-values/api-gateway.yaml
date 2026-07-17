@@ -3,7 +3,7 @@
 component: gateway
 image:
   name: api-gateway
-  tag: c84df4e
+  tag: 46d0d97
 service:
   port: 8080
 configMap:
