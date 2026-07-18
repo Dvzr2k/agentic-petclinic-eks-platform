@@ -1,10 +1,16 @@
 # Agentic Petclinic EKS Platform
 
+*[Leer en español →](README.es.md)*
+
 Production AWS infrastructure for [Spring Petclinic Microservices](https://github.com/spring-petclinic/spring-petclinic-microservices) (8 services, Spring Boot, Spring Cloud).
 
 ## Overview
 
 An end-to-end AWS platform covering infrastructure (Terraform), container orchestration (EKS), packaging (Helm), GitOps delivery (ArgoCD), CI (GitHub Actions), and full observability (Prometheus/Grafana/Loki/Zipkin) — built across separate dev and prod environments. The full scope of work is tracked in a [108-story Jira backlog](docs/jira-backlog.md) spanning 16 epics, from remote state and networking through security hardening, autoscaling, and GitOps.
+
+## Demo
+
+[Watch the demo video](https://drive.google.com/file/d/108DxbGT0QErEHmow4BqM0hqDFBDXJ9KQ/view?usp=drive_link) — live app, the GitOps deploy loop (GitHub Actions → ECR → ArgoCD), and the observability stack.
 
 ## Built With Claude Code
 
